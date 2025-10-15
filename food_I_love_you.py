@@ -908,7 +908,8 @@ def qr_generator():
         with cols[idx % 4]:
             qr_img = generate_table_qr(base_url, table_num, qr_size)
             if qr_img:
-                st.image(qr_img, caption=f"Table {table_num}", use_column_width=True)
+                # FIXED: Changed use_column_width to use_container_width
+                st.image(qr_img, caption=f"Table {table_num}", use_container_width=True)
 
 def generate_table_qr(base_url, table_number, size=150):
     try:
