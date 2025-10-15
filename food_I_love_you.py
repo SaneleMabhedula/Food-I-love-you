@@ -595,7 +595,7 @@ def show_order_confirmation(order_id, table_number, customer_name, order_type, o
         st.info(f"**Estimated wait time:** ~{max_prep_time} minutes")
     
     with col2:
-        tracking_url = f"http://localhost:8501/?order_id={order_id}"
+        tracking_url = f"https://myfood.streamlit.app/?order_id={order_id}"
         qr = qrcode.QRCode(version=1, box_size=10, border=5)
         qr.add_data(tracking_url)
         qr.make(fit=True)
@@ -871,7 +871,7 @@ def qr_generator():
     with col1:
         base_url = st.text_input(
             "Ordering Page URL",
-            value="http://localhost:8501",
+            value="https://myfood.streamlit.app/",
             help="The URL where your Streamlit app is hosted"
         )
         
