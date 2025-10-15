@@ -35,7 +35,6 @@ class RestaurantDB:
             if 'order_type' not in columns:
                 # Add the missing column
                 cursor.execute('ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT "dine_in"')
-                st.info("Updated database schema - added order_type column")
         else:
             # Create orders table if it doesn't exist
             cursor.execute('''
@@ -52,7 +51,6 @@ class RestaurantDB:
                     status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-            st.info("Created new orders table")
         
         # Check if analytics table exists
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='analytics'")
@@ -73,7 +71,6 @@ class RestaurantDB:
                     order_type TEXT
                 )
             ''')
-            st.info("Created new analytics table")
         
         self.conn.commit()
     
@@ -133,7 +130,7 @@ class RestaurantDB:
                     'order_id': row[1],
                     'table_number': row[2],
                     'customer_name': row[3],
-                    'order_type': row[4] if len(row) > 4 else 'dine_in',  # Handle missing column
+                    'order_type': row[4] if len(row) > 4 else 'dine_in',
                     'items': json.loads(row[5]),
                     'total_amount': row[6],
                     'status': row[7],
@@ -142,7 +139,6 @@ class RestaurantDB:
                 }
                 orders.append(order_data)
             except Exception as e:
-                st.error(f"Error parsing order: {e}")
                 continue
         
         return orders
@@ -341,7 +337,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Load custom CSS with dark mode compatibility
+# Load custom CSS
 def load_css():
     st.markdown("""
     <style>
@@ -430,16 +426,8 @@ def load_css():
         background: linear-gradient(135deg, #FF6B35, #F7931E);
         transition: width 0.5s ease;
     }
-    
-    /* Ensure text is visible in both modes */
     .menu-item-card h4, .menu-item-card p {
         color: #000000 !important;
-    }
-    
-    /* Make sure all text is visible */
-    .stTextInput>div>div>input, .stNumberInput>div>div>input {
-        color: #000000 !important;
-        background-color: #FFFFFF !important;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -447,7 +435,6 @@ def load_css():
 load_css()
 
 def main():
-    # Use st.query_params instead of st.experimental_get_query_params
     query_params = st.query_params
     order_id = query_params.get('order_id', [None])[0]
     table_number = query_params.get('table', [None])[0]
@@ -468,7 +455,6 @@ def show_main_navigation():
     
     st.sidebar.title("🍔 Restaurant Dashboard")
     
-    # Debug info for staff
     if is_staff:
         orders = db.get_orders()
         st.sidebar.info(f"Total orders in system: {len(orders)}")
@@ -710,7 +696,6 @@ def kitchen_display():
     st.markdown('<div class="staff-view">', unsafe_allow_html=True)
     st.markdown('<div class="main-header">👨‍🍳 Kitchen Command Center</div>', unsafe_allow_html=True)
     
-    # Show debug info
     orders = db.get_orders()
     st.info(f"📊 Total orders in system: {len(orders)}")
     st.info(f"👨‍🍳 Active orders: {len([o for o in orders if o['status'] != 'completed'])}")
@@ -908,7 +893,7 @@ def qr_generator():
         with cols[idx % 4]:
             qr_img = generate_table_qr(base_url, table_num, qr_size)
             if qr_img:
-                # FIXED: Changed use_column_width to use_container_width
+                # FIXED: use_container_width instead of use_column_width
                 st.image(qr_img, caption=f"Table {table_num}", use_container_width=True)
 
 def generate_table_qr(base_url, table_number, size=150):
