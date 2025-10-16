@@ -410,8 +410,23 @@ def get_qr_download_link(img_str, filename="sanele_ordering_qr.png"):
     href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📱 Download QR Code</a>'
     return href
 
+# Device detection
+def is_mobile_device():
+    """Check if the user is on a mobile device"""
+    try:
+        # Streamlit doesn't directly provide user agent, so we'll use a simple approach
+        # In production, you might want to use a more sophisticated method
+        return False  # Default to non-mobile for development
+    except:
+        return False
+
 # Authentication for staff
 def staff_login():
+    # Check if on mobile device and restrict staff login
+    if is_mobile_device():
+        st.sidebar.warning("📱 Staff login is not available on mobile devices. Please use a desktop or tablet.")
+        return
+    
     st.sidebar.title("Staff Login")
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
@@ -466,6 +481,11 @@ def init_session_state():
         st.session_state.last_status_check = None
     if 'current_order_status' not in st.session_state:
         st.session_state.current_order_status = None
+    # Tracking-specific session state
+    if 'tracking_order_token' not in st.session_state:
+        st.session_state.tracking_order_token = None
+    if 'tracking_order_placed' not in st.session_state:
+        st.session_state.tracking_order_placed = False
 
 # Customer Ordering Interface
 def customer_ordering():
@@ -726,10 +746,21 @@ def show_order_confirmation():
 def track_order():
     st.title("📱 Track Your Order")
     
+    # Initialize session state for tracking
+    if 'tracking_order_token' not in st.session_state:
+        st.session_state.tracking_order_token = None
+    if 'tracking_order_placed' not in st.session_state:
+        st.session_state.tracking_order_placed = False
+    
+    # Check if we have an active order from the ordering flow
     if st.session_state.get('order_placed') and st.session_state.get('order_token'):
-        # Use the order token from the current order
         order_token = st.session_state.order_token
+        st.session_state.tracking_order_token = order_token
+        st.session_state.tracking_order_placed = True
         display_order_tracking(order_token)
+    elif st.session_state.tracking_order_placed and st.session_state.tracking_order_token:
+        # Use the stored tracking token
+        display_order_tracking(st.session_state.tracking_order_token)
     else:
         # Allow manual order token entry
         st.info("Enter your Order Token to track your order status")
@@ -737,18 +768,27 @@ def track_order():
         
         if st.button("Track Order", key="track_order_btn"):
             if order_token:
-                st.session_state.order_token = order_token
-                st.session_state.order_placed = True
+                st.session_state.tracking_order_token = order_token
+                st.session_state.tracking_order_placed = True
                 st.rerun()
+            else:
+                st.error("Please enter an order token")
 
 def display_order_tracking(order_token):
     try:
         # Get current order status for live updates
         current_status = db.get_order_status(order_token)
         
-        # Update session state with current status
-        if current_status and current_status != st.session_state.current_order_status:
+        if not current_status:
+            st.error("❌ Order not found. Please check your Order Token.")
+            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            return
+        
+        # Update session state with current status for comparison
+        previous_status = st.session_state.get('current_order_status')
+        if current_status != previous_status:
             st.session_state.current_order_status = current_status
+            # Force a rerun when status changes
             st.rerun()
         
         # Get full order details
@@ -767,8 +807,22 @@ def display_order_tracking(order_token):
             current_status = str(order[5]) if order[5] else 'pending'
             emoji = status_emoji.get(current_status, '📝')
             
-            # Display real-time status header
-            st.success(f"## {emoji} Order Status: {current_status.title()}")
+            # Display real-time status header with visual feedback
+            status_colors = {
+                'pending': '#FFA500',  # Orange
+                'preparing': '#1E90FF',  # Dodger Blue
+                'ready': '#32CD32',  # Lime Green
+                'completed': '#008000',  # Green
+                'collected': '#4B0082'  # Indigo
+            }
+            
+            status_color = status_colors.get(current_status, '#666666')
+            
+            st.markdown(f"""
+            <div style="background-color: {status_color}; color: white; padding: 1rem; border-radius: 10px; text-align: center;">
+                <h2 style="margin: 0; color: white;">{emoji} Order Status: {current_status.title()}</h2>
+            </div>
+            """, unsafe_allow_html=True)
             
             # Order details
             st.subheader("📋 Order Details")
@@ -777,6 +831,7 @@ def display_order_tracking(order_token):
                 st.write(f"**Order ID:** {order[0]}")
                 st.write(f"**Customer:** {order[2]}")
                 st.write(f"**Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
+                st.write(f"**Order Token:** `{order_token}`")
             with col2:
                 st.write(f"**Total:** R {order[6]}")
                 st.write(f"**Order Date:** {order[7]}")
@@ -817,8 +872,9 @@ def display_order_tracking(order_token):
                     # Show estimated time for current step
                     if status == 'preparing':
                         st.write("   *Estimated: 10-15 minutes*")
-                    elif status == 'ready':
+                    elif status == 'ready' or status == 'ready for collection':
                         st.write("   *Your order is ready!*")
+                        st.balloons()
                 else:
                     st.write(f"⏳ {status.title()} - Pending")
             
@@ -835,7 +891,6 @@ def display_order_tracking(order_token):
             order_type = str(order[4]) if order[4] else 'dine-in'
             if order_type == 'takeaway' and current_status == 'ready for collection':
                 st.success("🎯 **Your order is ready for collection!**")
-                st.balloons()
                 if st.button("🎯 I've Collected My Order", type="primary", key="collect_btn"):
                     try:
                         db.update_order_status(order[0], 'collected', 'Customer collected order')
@@ -847,16 +902,18 @@ def display_order_tracking(order_token):
             
             # Auto-refresh for live updates
             st.markdown("---")
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.info("🔄 **Live Tracking Active** - Status updates automatically")
-                st.write("Last checked: " + datetime.now().strftime("%H:%M:%S"))
-            with col2:
-                if st.button("🔄 Refresh Now", key="refresh_btn"):
-                    st.rerun()
+            refresh_container = st.container()
+            with refresh_container:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.info("🔄 **Live Tracking Active** - Status updates automatically")
+                    st.write("Last checked: " + datetime.now().strftime("%H:%M:%S"))
+                with col2:
+                    if st.button("🔄 Refresh Now", key="refresh_btn"):
+                        st.rerun()
             
-            # Auto-refresh every 5 seconds
-            time.sleep(5)
+            # Auto-refresh every 3 seconds for better real-time updates
+            time.sleep(3)
             st.rerun()
                 
         else:
@@ -1391,15 +1448,23 @@ def main():
     # Main navigation - Customer vs Staff
     st.sidebar.title("🍽️ Sanele Restaurant")
     
+    # Mobile device detection
+    is_mobile = is_mobile_device()
+    
     if st.session_state.logged_in:
         # Staff interface
         staff_navigation()
     else:
         # Customer interface or staff login
-        app_mode = st.sidebar.radio(
-            "I want to:",
-            ["🏠 Home", "Place an Order 🍕", "Track My Order 📱", "Staff Login 👨‍💼"]
-        )
+        app_options = ["🏠 Home", "Place an Order 🍕", "Track My Order 📱"]
+        
+        # Only show staff login on non-mobile devices
+        if not is_mobile:
+            app_options.append("Staff Login 👨‍💼")
+        else:
+            st.sidebar.info("📱 Mobile-friendly ordering available")
+        
+        app_mode = st.sidebar.radio("I want to:", app_options)
         
         if app_mode == "🏠 Home":
             show_landing_page()
@@ -1407,7 +1472,7 @@ def main():
             customer_ordering()
         elif app_mode == "Track My Order 📱":
             track_order()
-        else:  # Staff Login
+        elif app_mode == "Staff Login 👨‍💼" and not is_mobile:
             staff_login()
             if not st.session_state.logged_in:
                 show_landing_page()
