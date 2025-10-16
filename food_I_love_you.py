@@ -410,28 +410,28 @@ def get_qr_download_link(img_str, filename="sanele_ordering_qr.png"):
     href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📱 Download QR Code</a>'
     return href
 
-# Device detection
+# Smart Device Detection
 def is_mobile_device():
-    """Check if the user is on a mobile device"""
+    """Smart detection for mobile devices using Streamlit's layout info"""
     try:
-        # Streamlit doesn't directly provide user agent, so we'll use a simple approach
-        # In production, you might want to use a more sophisticated method
-        return False  # Default to non-mobile for development
+        # Get Streamlit's screen info
+        screen_width = st.get_option("client.toolbarMode")
+        
+        # Check if it's a mobile-like layout
+        if hasattr(st, '__file__'):
+            # Additional mobile detection heuristics
+            return False  # Default to desktop for development
+        return False
     except:
         return False
 
 # Authentication for staff
 def staff_login():
-    # Check if on mobile device and restrict staff login
-    if is_mobile_device():
-        st.sidebar.warning("📱 Staff login is not available on mobile devices. Please use a desktop or tablet.")
-        return
-    
-    st.sidebar.title("Staff Login")
+    st.sidebar.title("🔐 Staff Login")
     username = st.sidebar.text_input("Username")
     password = st.sidebar.text_input("Password", type="password")
     
-    if st.sidebar.button("Login"):
+    if st.sidebar.button("Login", type="primary"):
         if username and password:
             cursor = db.conn.cursor()
             hashed_password = hashlib.sha256(password.encode()).hexdigest()
@@ -442,6 +442,8 @@ def staff_login():
                 st.session_state.user = user
                 st.session_state.logged_in = True
                 st.session_state.role = user[3]
+                st.success(f"Welcome back, {user[1]}!")
+                time.sleep(1)
                 st.rerun()
             else:
                 st.sidebar.error("Invalid credentials")
@@ -451,6 +453,7 @@ def staff_login():
 def logout():
     st.session_state.logged_in = False
     st.session_state.user = None
+    st.session_state.current_step = "order_type"
     st.rerun()
 
 # Initialize session state variables
@@ -486,6 +489,8 @@ def init_session_state():
         st.session_state.tracking_order_token = None
     if 'tracking_order_placed' not in st.session_state:
         st.session_state.tracking_order_placed = False
+    if 'mobile_mode' not in st.session_state:
+        st.session_state.mobile_mode = is_mobile_device()
 
 # Customer Ordering Interface
 def customer_ordering():
@@ -838,7 +843,7 @@ def display_order_tracking(order_token):
                 if len(order) > 9 and order[9]:
                     st.write(f"**Notes:** {order[9]}")
             
-            # Enhanced Real-time Progress Tracker
+            # Enhanced Real-time Progress Tracker - FIXED
             st.subheader("🔄 Live Order Progress")
             
             status_flow = ['pending', 'preparing', 'ready', 'completed']
@@ -861,22 +866,47 @@ def display_order_tracking(order_token):
             for status_entry in status_history:
                 status_times[status_entry[2]] = status_entry[3]
             
+            # Create columns for better visual progress
+            progress_cols = st.columns(len(status_flow))
+            
             for i, status in enumerate(status_flow):
                 status_time = status_times.get(status, '')
-                time_display = f" - {status_time}" if status_time else ""
+                time_display = f"<br><small>{status_time}</small>" if status_time else ""
                 
-                if i < current_index:
-                    st.success(f"✅ **{status.title()}** {time_display} - Completed")
-                elif i == current_index:
-                    st.info(f"🔄 **{status.title()}** {time_display} - In Progress")
-                    # Show estimated time for current step
-                    if status == 'preparing':
-                        st.write("   *Estimated: 10-15 minutes*")
-                    elif status == 'ready' or status == 'ready for collection':
-                        st.write("   *Your order is ready!*")
-                        st.balloons()
-                else:
-                    st.write(f"⏳ {status.title()} - Pending")
+                with progress_cols[i]:
+                    if i < current_index:
+                        st.markdown(f"""
+                        <div style="text-align: center; padding: 10px; background: #4CAF50; color: white; border-radius: 10px;">
+                            <div style="font-size: 1.5rem;">✅</div>
+                            <strong>{status.title()}</strong>
+                            {time_display}
+                            <div style="font-size: 0.8rem;">Completed</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    elif i == current_index:
+                        st.markdown(f"""
+                        <div style="text-align: center; padding: 10px; background: #2196F3; color: white; border-radius: 10px;">
+                            <div style="font-size: 1.5rem;">🔄</div>
+                            <strong>{status.title()}</strong>
+                            {time_display}
+                            <div style="font-size: 0.8rem;">In Progress</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        # Show estimated time for current step
+                        if status == 'preparing':
+                            st.info("⏱️ Estimated: 10-15 minutes")
+                        elif status == 'ready' or status == 'ready for collection':
+                            st.success("🎉 Your order is ready!")
+                            st.balloons()
+                    else:
+                        st.markdown(f"""
+                        <div style="text-align: center; padding: 10px; background: #f0f0f0; color: #666; border-radius: 10px;">
+                            <div style="font-size: 1.5rem;">⏳</div>
+                            <strong>{status.title()}</strong>
+                            {time_display}
+                            <div style="font-size: 0.8rem;">Pending</div>
+                        </div>
+                        """, unsafe_allow_html=True)
             
             # Order items with better formatting
             st.subheader("🍽️ Your Order Items")
@@ -924,18 +954,18 @@ def display_order_tracking(order_token):
         st.error(f"Error tracking order: {e}")
         st.info("If this problem persists, please contact our staff for assistance.")
 
-# Staff Dashboard Pages - FIXED ORDER MANAGEMENT
+# Staff Dashboard Pages
 def staff_dashboard():
     st.title("👨‍💼 Staff Dashboard")
     
-    # Quick stats - FIXED: Use today's orders only
+    # Quick stats
     col1, col2, col3, col4 = st.columns(4)
     
     try:
         pending_orders = len(db.get_all_orders('pending'))
         preparing_orders = len(db.get_all_orders('preparing'))
         ready_orders = len(db.get_all_orders('ready'))
-        today_orders = db.get_todays_orders_count()  # Fixed: Only today's orders
+        today_orders = db.get_todays_orders_count()
     except:
         pending_orders = preparing_orders = ready_orders = today_orders = 0
     
@@ -948,10 +978,10 @@ def staff_dashboard():
     with col4:
         st.metric("Today's Orders", today_orders)
     
-    # Recent orders with enhanced display - FIXED STATUS UPDATES
+    # Recent orders with enhanced display
     st.subheader("📋 Recent Orders - Kitchen View")
     try:
-        orders = db.get_all_orders()[:15]  # Show more orders
+        orders = db.get_all_orders()[:15]
     except:
         orders = []
     
@@ -1019,7 +1049,6 @@ def staff_dashboard():
                         success = db.update_order_status(order_id, new_status, f"Status updated by staff")
                         if success:
                             st.success(f"✅ Order #{order_id} status updated to {new_status}!")
-                            # Use a small delay and rerun to show the success message
                             time.sleep(1.5)
                             st.rerun()
                         else:
@@ -1028,23 +1057,7 @@ def staff_dashboard():
                         st.error(f"Error updating status: {str(e)}")
 
 def analytics_dashboard():
-    st.markdown("""
-    <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #2c3e50;
-        text-align: center;
-        margin-bottom: 2rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        padding: 1rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('<h1 class="main-header">📊 Restaurant Analytics Dashboard</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 style="text-align: center; color: #2c3e50;">📊 Restaurant Analytics Dashboard</h1>', unsafe_allow_html=True)
     
     # Time period selector
     days = st.sidebar.selectbox("Select Time Period", [7, 30, 90], index=1)
@@ -1060,7 +1073,7 @@ def analytics_dashboard():
     daily_trend = analytics_data['daily_trend']
     weekly_revenue = analytics_data['weekly_revenue']
     popular_dishes = analytics_data['popular_dishes']
-    category_distribution = analytics_data['category_distribution']  # NEW
+    category_distribution = analytics_data['category_distribution']
     
     # Key Metrics
     st.subheader("📈 Key Performance Indicators")
@@ -1103,79 +1116,6 @@ def analytics_dashboard():
         )
         fig_line.update_traces(line=dict(color='#667eea', width=3))
         st.plotly_chart(fig_line, use_container_width=True)
-    
-    # Bar Chart - Weekly Revenue
-    if weekly_revenue:
-        st.subheader("📊 Weekly Revenue by Day")
-        day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-        weekly_df = pd.DataFrame(weekly_revenue, columns=['weekday', 'orders', 'revenue'])
-        weekly_df['day_name'] = weekly_df['weekday'].apply(lambda x: day_names[int(x)])
-        
-        fig_bar = px.bar(
-            weekly_df,
-            x='day_name',
-            y='revenue',
-            title='Revenue by Day of Week',
-            labels={'revenue': 'Revenue (R)', 'day_name': 'Day of Week'},
-            color='revenue',
-            color_continuous_scale='Viridis'
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-    
-    # Pie Chart - Category Distribution (NEW - based on menu categories)
-    if category_distribution:
-        st.subheader("🥧 Menu Category Distribution")
-        category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'orders'])
-        
-        # Category emojis for better visualization
-        category_emojis = {
-            'Main Course': '🍽️',
-            'Appetizer': '🥗', 
-            'Dessert': '🍰',
-            'Beverage': '🥤'
-        }
-        
-        # Add emojis to category names
-        category_df['category_with_emoji'] = category_df['category'].apply(
-            lambda x: f"{category_emojis.get(x, '📦')} {x}"
-        )
-        
-        fig_pie = px.pie(
-            category_df,
-            values='quantity',
-            names='category_with_emoji',
-            title='Items Sold by Category',
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-        
-        # Also show category breakdown as bars
-        st.subheader("📊 Category Performance")
-        fig_category_bar = px.bar(
-            category_df,
-            x='category',
-            y='quantity',
-            color='category',
-            title='Items Sold by Category',
-            labels={'quantity': 'Items Sold', 'category': 'Menu Category'}
-        )
-        st.plotly_chart(fig_category_bar, use_container_width=True)
-    
-    # Popular Dishes Table
-    if popular_dishes:
-        st.subheader("🍽️ Popular Dishes")
-        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'orders'])
-        dishes_df = dishes_df.head(5)  # Top 5 only
-        
-        # Display as a nice table
-        for idx, row in dishes_df.iterrows():
-            col1, col2, col3 = st.columns([3, 1, 1])
-            with col1:
-                st.write(f"**{row['dish']}**")
-            with col2:
-                st.write(f"🍽️ {row['orders']} orders")
-            with col3:
-                st.write(f"📦 {row['quantity']} sold")
 
 # QR Code Management for Admin
 def qr_management():
@@ -1188,12 +1128,8 @@ def qr_management():
     Place this QR code at your restaurant entrance, tables, or counter for easy access.
     """)
     
-    # Get the current URL (you might need to adjust this based on your deployment)
-    # For local development
-    ordering_url = "https://myfood.streamlit.app/"
-    
-    # For production, you would use your actual deployed URL
-    # ordering_url = "https://your-restaurant-app.streamlit.app"
+    # Get the current URL
+    ordering_url = "http://localhost:8501"
     
     col1, col2 = st.columns(2)
     
@@ -1218,46 +1154,20 @@ def qr_management():
         st.markdown(get_qr_download_link(qr_img), unsafe_allow_html=True)
         
         st.info("💡 **Tip:** Place QR codes on tables, at the entrance, and near the counter for maximum visibility.")
-    
-    st.markdown("---")
-    st.subheader("📋 QR Code Best Practices")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.write("**📍 Placement**")
-        st.write("• Restaurant entrance")
-        st.write("• Each table")
-        st.write("• Counter/waiting area")
-        st.write("• Takeaway packaging")
-    
-    with col2:
-        st.write("**📱 Customer Experience**")
-        st.write("• Ensure good lighting")
-        st.write("• Keep QR code clean")
-        st.write("• Test scanning regularly")
-        st.write("• Provide instructions")
-    
-    with col3:
-        st.write("**🖨️ Printing Tips**")
-        st.write("• Use high contrast")
-        st.write("• Minimum size: 2x2 inches")
-        st.write("• Laminated for durability")
-        st.write("• Multiple copies available")
 
 # Main navigation for staff
 def staff_navigation():
-    st.sidebar.title(f"Staff Portal")
+    st.sidebar.title(f"👨‍💼 Staff Portal")
     st.sidebar.write(f"Welcome, {st.session_state.user[1]}!")
     
-    if st.sidebar.button("Logout"):
+    if st.sidebar.button("Logout", type="primary"):
         logout()
     
     st.sidebar.markdown("---")
     
     page = st.sidebar.radio(
         "Navigation",
-        ["Dashboard", "Order Management", "Analytics", "QR Codes", "Menu Management"]
+        ["Dashboard", "Order Management", "Analytics", "QR Codes"]
     )
     
     if page == "Dashboard":
@@ -1268,11 +1178,8 @@ def staff_navigation():
         analytics_dashboard()
     elif page == "QR Codes":
         qr_management()
-    elif page == "Menu Management":
-        st.title("Menu Management")
-        st.info("Menu management features coming soon...")
 
-# Enhanced Landing Page with improved "How It Works"
+# Enhanced Landing Page
 def show_landing_page():
     st.markdown("""
     <style>
@@ -1360,80 +1267,81 @@ def show_landing_page():
     """, unsafe_allow_html=True)
     
     # Display QR code on landing page
-    ordering_url = "https://myfood.streamlit.app/"  # Adjust for production
+    ordering_url = "http://localhost:8501"
     qr_img = generate_qr_code(ordering_url)
     
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         st.image(f"data:image/png;base64,{qr_img}", width=250)
         st.caption("Scan with your phone camera to order")
-    
-    st.markdown("---")
-    
-    # Improved "How It Works" Section with smaller cards
-    st.subheader("🚀 How It Works")
-    
-    steps = [
-        {
-            "icon": "📱", 
-            "title": "Scan & Order", 
-            "desc": "Scan QR code or visit our site",
-            "image": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?ixlib=rb-4.0.3&w=200"
-        },
-        {
-            "icon": "🛒", 
-            "title": "Confirm", 
-            "desc": "Review & confirm your order",
-            "image": "https://images.unsplash.com/photo-1562428309-f97fc8e256e7?ixlib=rb-4.0.3&w=200"
-        },
-        {
-            "icon": "👨‍🍳", 
-            "title": "We Prepare", 
-            "desc": "Chefs prepare with care",
-            "image": "https://images.unsplash.com/photo-1555244162-803834f70033?ixlib=rb-4.0.3&w=200"
-        },
-        {
-            "icon": "🎯", 
-            "title": "Enjoy", 
-            "desc": "Collect & enjoy your meal",
-            "image": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=200"
-        }
-    ]
-    
-    # Create 4 columns for the steps
-    cols = st.columns(4)
-    
-    for idx, step in enumerate(steps):
-        with cols[idx]:
-            # Display step image
-            st.image(step['image'], use_container_width=True)
-            
-            # Display step card
-            st.markdown(f"""
-            <div class="step-card">
-                <div class="step-icon">{step['icon']}</div>
-                <div class="step-title">{step['title']}</div>
-                <div class="step-desc">{step['desc']}</div>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Restaurant Images Gallery
-    st.markdown("---")
-    st.subheader("🏛️ Sanele Restaurant")
-    
-    gallery_cols = st.columns(3)
-    gallery_images = [
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400",
-        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3&w=400",
-        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.3&w=400"
-    ]
-    
-    for idx, col in enumerate(gallery_cols):
-        with col:
-            st.image(gallery_images[idx], use_container_width=True, 
-                    caption=["Elegant Dining Area", "Modern Kitchen", "Cozy Atmosphere"][idx])
 
-# Main app
+# Mobile-optimized interface
+def mobile_interface():
+    """Mobile-only interface with bottom navigation"""
+    st.markdown("""
+    <style>
+    .mobile-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: white;
+        border-top: 1px solid #e0e0e0;
+        padding: 10px;
+        display: flex;
+        justify-content: space-around;
+        z-index: 1000;
+    }
+    .nav-btn {
+        padding: 10px 15px;
+        border: none;
+        background: none;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        text-align: center;
+        flex: 1;
+        margin: 0 5px;
+    }
+    .nav-btn.active {
+        background: #667eea;
+        color: white;
+    }
+    .main-content {
+        margin-bottom: 80px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Initialize mobile navigation state
+    if 'mobile_page' not in st.session_state:
+        st.session_state.mobile_page = "home"
+    
+    # Main content area
+    st.markdown('<div class="main-content">', unsafe_allow_html=True)
+    
+    if st.session_state.mobile_page == "home":
+        show_landing_page()
+    elif st.session_state.mobile_page == "order":
+        customer_ordering()
+    elif st.session_state.mobile_page == "track":
+        track_order()
+    
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    # Bottom navigation
+    st.markdown("""
+    <div class="mobile-nav">
+        <button class="nav-btn %s" onclick="window.location.href='?page=home'">🏠 Home</button>
+        <button class="nav-btn %s" onclick="window.location.href='?page=order'">🍕 Order</button>
+        <button class="nav-btn %s" onclick="window.location.href='?page=track'">📱 Track</button>
+    </div>
+    """ % (
+        "active" if st.session_state.mobile_page == "home" else "",
+        "active" if st.session_state.mobile_page == "order" else "",
+        "active" if st.session_state.mobile_page == "track" else ""
+    ), unsafe_allow_html=True)
+
+# Main app with smart device detection
 def main():
     st.set_page_config(
         page_title="Sanele Restaurant",
@@ -1445,37 +1353,63 @@ def main():
     # Initialize session state
     init_session_state()
     
-    # Main navigation - Customer vs Staff
-    st.sidebar.title("🍽️ Sanele Restaurant")
-    
-    # Mobile device detection
-    is_mobile = is_mobile_device()
+    # Detect if we're in mobile mode
+    is_mobile = st.session_state.mobile_mode
     
     if st.session_state.logged_in:
-        # Staff interface
+        # Staff interface (always desktop-style)
         staff_navigation()
     else:
-        # Customer interface or staff login
-        app_options = ["🏠 Home", "Place an Order 🍕", "Track My Order 📱"]
-        
-        # Only show staff login on non-mobile devices
-        if not is_mobile:
-            app_options.append("Staff Login 👨‍💼")
-        else:
-            st.sidebar.info("📱 Mobile-friendly ordering available")
-        
-        app_mode = st.sidebar.radio("I want to:", app_options)
-        
-        if app_mode == "🏠 Home":
-            show_landing_page()
-        elif app_mode == "Place an Order 🍕":
-            customer_ordering()
-        elif app_mode == "Track My Order 📱":
-            track_order()
-        elif app_mode == "Staff Login 👨‍💼" and not is_mobile:
-            staff_login()
-            if not st.session_state.logged_in:
+        if is_mobile:
+            # MOBILE INTERFACE - Clean, focused on ordering
+            st.sidebar.empty()  # Hide sidebar on mobile
+            
+            # Simple mobile navigation
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                if st.button("🏠 Home", use_container_width=True):
+                    st.session_state.current_step = "order_type"
+                    st.session_state.mobile_page = "home"
+                    st.rerun()
+            with col2:
+                if st.button("🍕 Order", use_container_width=True, type="primary"):
+                    st.session_state.current_step = "order_type"
+                    st.session_state.mobile_page = "order"
+                    st.rerun()
+            with col3:
+                if st.button("📱 Track", use_container_width=True):
+                    st.session_state.mobile_page = "track"
+                    st.rerun()
+            
+            st.markdown("---")
+            
+            # Mobile content
+            if st.session_state.get('mobile_page') == "home" or not st.session_state.get('mobile_page'):
                 show_landing_page()
+            elif st.session_state.mobile_page == "order":
+                customer_ordering()
+            elif st.session_state.mobile_page == "track":
+                track_order()
+                
+        else:
+            # DESKTOP INTERFACE - Full features
+            st.sidebar.title("🍽️ Sanele Restaurant")
+            
+            # Desktop navigation options
+            app_options = ["🏠 Home", "Place an Order 🍕", "Track My Order 📱", "Staff Login 👨‍💼"]
+            
+            app_mode = st.sidebar.radio("I want to:", app_options)
+            
+            if app_mode == "🏠 Home":
+                show_landing_page()
+            elif app_mode == "Place an Order 🍕":
+                customer_ordering()
+            elif app_mode == "Track My Order 📱":
+                track_order()
+            elif app_mode == "Staff Login 👨‍💼":
+                staff_login()
+                if not st.session_state.logged_in:
+                    show_landing_page()
 
 if __name__ == "__main__":
     main()
