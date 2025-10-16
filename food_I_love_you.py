@@ -133,31 +133,31 @@ class RestaurantDB:
         # Clear existing menu items and insert new South African menu
         cursor.execute('DELETE FROM menu_items')
         
-        # COMPLETELY NEW SOUTH AFRICAN MENU WITH CORRECT IMAGES
+        # FIXED: Using only reliable Unsplash image URLs
         south_african_menu = [
             # STARTERS
-            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://upload.wikimedia.org/wikipedia/commons/7/7a/Biltong_%28sliced%29.jpg'),
-            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Chakalaka_and_pap.jpg'),
+            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
             ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1603100055781-cab7adf375b1?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
 
             # MAIN COURSES
             ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Bobotie.jpg'),
-            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/4/4f/Bunny_Chow.jpg'),
-            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/9/9c/Pap_and_wors.jpg'),
-            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/2/2e/Potjiekos.JPG'),
-            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/e/e4/Samp_and_beans_%28Umngqusho%29.jpg'),
-            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/7/75/Boerewors_Roll.jpg'),
-            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://upload.wikimedia.org/wikipedia/commons/7/76/Vetkoek_with_mince.jpg'),
+            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1565299588453-b8ec840b7c7e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1551024506-0bccd828d307?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1512058564366-18510be2db19?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550317138-10000687a72b?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
 
             # DESSERTS
-            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://upload.wikimedia.org/wikipedia/commons/1/11/Melktert.jpg'),
-            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://upload.wikimedia.org/wikipedia/commons/5/52/Koeksisters_South_Africa.jpg'),
-            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://upload.wikimedia.org/wikipedia/commons/2/2d/Malva_pudding.jpg'),
+            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1555507036-ab794f27d2e9?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
 
             # BEVERAGES
             ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://upload.wikimedia.org/wikipedia/commons/0/00/Amarula_Cream_Liqueur_Bottle_and_Glass.jpg'),
+            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
             ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
             ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400&h=300&fit=crop')
         ]
@@ -585,6 +585,7 @@ def show_order_type_selection():
     col1, col2, col3 = st.columns(3)
     
     with col1:
+        # FIXED: Using reliable Unsplash image
         st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
         if st.button("🏠 **Dine In**", use_container_width=True, key="dine_in_btn"):
             st.session_state.order_type = "dine-in"
@@ -593,6 +594,7 @@ def show_order_type_selection():
         st.caption("Enjoy our cozy atmosphere")
     
     with col2:
+        # FIXED: Using reliable Unsplash image
         st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
         if st.button("🥡 **Takeaway**", use_container_width=True, key="takeaway_btn"):
             st.session_state.order_type = "takeaway"
@@ -601,6 +603,7 @@ def show_order_type_selection():
         st.caption("Pick up and enjoy elsewhere")
     
     with col3:
+        # FIXED: Using reliable Unsplash image
         st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
         if st.button("🚚 **Delivery**", use_container_width=True, key="delivery_btn"):
             st.session_state.order_type = "delivery"
@@ -698,9 +701,9 @@ def show_menu_selection():
     except:
         # Fallback if database error - use new menu items
         menu_items = [
-            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://upload.wikimedia.org/wikipedia/commons/7/7a/Biltong_%28sliced%29.jpg'),
+            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
             (2, 'Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://upload.wikimedia.org/wikipedia/commons/0/0c/Bobotie.jpg')
+            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400&h=300&fit=crop')
         ]
     
     # Display menu items
@@ -1163,6 +1166,7 @@ def show_landing_page():
             st.rerun()
     
     with col2:
+        # FIXED: Using reliable Unsplash image
         st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400", 
                 use_container_width=True, caption="Our Beautiful Restaurant")
     
@@ -1228,6 +1232,7 @@ def show_landing_page():
     st.subheader("🏛️ Our Restaurant")
     
     gallery = st.columns(3)
+    # FIXED: All reliable Unsplash images
     gallery_images = [
         "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400",
         "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3&w=400", 
