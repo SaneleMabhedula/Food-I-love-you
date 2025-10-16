@@ -1,915 +1,1416 @@
 import streamlit as st
+import sqlite3
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import hashlib
 import time
+import random
 import qrcode
-from PIL import Image
-import io
+from io import BytesIO
 import base64
-import sqlite3
-import json
-import uuid
-import os
 
-# Database Class with proper table creation
+# Database setup with migration support
 class RestaurantDB:
-    def __init__(self):
-        self.db_path = 'restaurant_orders.db'
-        self.conn = sqlite3.connect(self.db_path, check_same_thread=False)
+    def __init__(self, db_name="restaurant.db"):
+        self.conn = sqlite3.connect(db_name, check_same_thread=False)
         self.create_tables()
     
     def create_tables(self):
         cursor = self.conn.cursor()
         
-        # Check if orders table exists and has the correct schema
+        # Check if tables exist and create if they don't
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")
         table_exists = cursor.fetchone()
         
-        if table_exists:
-            # Check if order_type column exists
-            cursor.execute("PRAGMA table_info(orders)")
-            columns = [column[1] for column in cursor.fetchall()]
-            
-            if 'order_type' not in columns:
-                # Add the missing column
-                cursor.execute('ALTER TABLE orders ADD COLUMN order_type TEXT DEFAULT "dine_in"')
+        if not table_exists:
+            self.create_fresh_tables()
         else:
-            # Create orders table if it doesn't exist
-            cursor.execute('''
-                CREATE TABLE orders (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    order_id TEXT UNIQUE,
-                    table_number INTEGER,
-                    customer_name TEXT,
-                    order_type TEXT DEFAULT 'dine_in',
-                    items TEXT,
-                    total_amount REAL,
-                    status TEXT DEFAULT 'received',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    status_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
+            # Check for missing columns and add them
+            self.update_tables()
         
-        # Check if analytics table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='analytics'")
-        analytics_exists = cursor.fetchone()
+        self.insert_default_data()
+    
+    def update_tables(self):
+        cursor = self.conn.cursor()
         
-        if not analytics_exists:
-            # Create analytics table if it doesn't exist
-            cursor.execute('''
-                CREATE TABLE analytics (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date DATE,
-                    hour INTEGER,
-                    item_id TEXT,
-                    item_name TEXT,
-                    category TEXT,
-                    quantity INTEGER,
-                    revenue REAL,
-                    order_type TEXT
-                )
-            ''')
+        # Check orders table columns
+        cursor.execute("PRAGMA table_info(orders)")
+        order_columns = [column[1] for column in cursor.fetchall()]
+        
+        # Add missing columns to orders table
+        if 'order_token' not in order_columns:
+            cursor.execute('ALTER TABLE orders ADD COLUMN order_token TEXT UNIQUE')
+        
+        # Check menu_items table columns
+        cursor.execute("PRAGMA table_info(menu_items)")
+        menu_columns = [column[1] for column in cursor.fetchall()]
+        
+        if 'image_url' not in menu_columns:
+            cursor.execute('ALTER TABLE menu_items ADD COLUMN image_url TEXT')
         
         self.conn.commit()
     
-    def create_order(self, table_number, customer_name, items, total_amount, order_type='dine_in'):
-        order_id = str(uuid.uuid4())[:8].upper()
-        
-        # Add individual item status
-        enhanced_items = []
-        for item in items:
-            enhanced_items.append({
-                **item,
-                'item_status': 'pending',
-                'item_id': f"{item['id']}_{uuid.uuid4().hex[:4]}"
-            })
-        
-        items_json = json.dumps(enhanced_items)
-        
+    def create_fresh_tables(self):
         cursor = self.conn.cursor()
+        
+        # Users table (staff only)
         cursor.execute('''
-            INSERT INTO orders (order_id, table_number, customer_name, items, total_amount, order_type)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (order_id, table_number, customer_name, items_json, total_amount, order_type))
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                role TEXT DEFAULT 'staff',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
-        # Update analytics
-        for item in enhanced_items:
-            cursor.execute('''
-                INSERT INTO analytics (date, hour, item_id, item_name, category, quantity, revenue, order_type)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                datetime.now().date(),
-                datetime.now().hour,
-                item['id'],
-                item['name'],
-                item.get('category', 'unknown'),
-                item['quantity'],
-                item['price'] * item['quantity'],
-                order_type
-            ))
-        
-        self.conn.commit()
-        return order_id
-    
-    def get_orders(self, status=None):
-        cursor = self.conn.cursor()
-        if status:
-            cursor.execute('''
-                SELECT * FROM orders WHERE status = ? ORDER BY created_at DESC
-            ''', (status,))
-        else:
-            cursor.execute('SELECT * FROM orders ORDER BY created_at DESC')
-        
-        orders = []
-        for row in cursor.fetchall():
-            try:
-                order_data = {
-                    'id': row[0],
-                    'order_id': row[1],
-                    'table_number': row[2],
-                    'customer_name': row[3],
-                    'order_type': row[4] if len(row) > 4 else 'dine_in',
-                    'items': json.loads(row[5]),
-                    'total_amount': row[6],
-                    'status': row[7],
-                    'created_at': row[8],
-                    'status_updated_at': row[9] if len(row) > 9 else row[8]
-                }
-                orders.append(order_data)
-            except Exception as e:
-                continue
-        
-        return orders
-    
-    def update_order_status(self, order_id, new_status):
-        cursor = self.conn.cursor()
+        # Menu items table
         cursor.execute('''
-            UPDATE orders 
-            SET status = ?, status_updated_at = CURRENT_TIMESTAMP 
-            WHERE order_id = ?
-        ''', (new_status, order_id))
+            CREATE TABLE IF NOT EXISTS menu_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT,
+                price REAL NOT NULL,
+                category TEXT NOT NULL,
+                available BOOLEAN DEFAULT TRUE,
+                image_url TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        # Orders table - simplified without customer_phone
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                table_number INTEGER,
+                customer_name TEXT NOT NULL,
+                order_type TEXT DEFAULT 'dine-in',
+                status TEXT DEFAULT 'pending',
+                total_amount REAL DEFAULT 0,
+                order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT,
+                estimated_wait_time INTEGER DEFAULT 15,
+                order_token TEXT UNIQUE
+            )
+        ''')
+        
+        # Order items table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER,
+                menu_item_id INTEGER,
+                menu_item_name TEXT,
+                quantity INTEGER NOT NULL,
+                price REAL NOT NULL,
+                special_instructions TEXT,
+                FOREIGN KEY (order_id) REFERENCES orders (id),
+                FOREIGN KEY (menu_item_id) REFERENCES menu_items (id)
+            )
+        ''')
+        
+        # Order status history table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS order_status_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER,
+                status TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                notes TEXT,
+                FOREIGN KEY (order_id) REFERENCES orders (id)
+            )
+        ''')
+        
         self.conn.commit()
-        return cursor.rowcount > 0
     
-    def update_item_status(self, order_id, item_id, new_status):
+    def insert_default_data(self):
         cursor = self.conn.cursor()
         
-        cursor.execute('SELECT items FROM orders WHERE order_id = ?', (order_id,))
-        result = cursor.fetchone()
-        
-        if result:
-            items = json.loads(result[0])
-            
-            for item in items:
-                if item.get('item_id') == item_id:
-                    item['item_status'] = new_status
-                    break
-            
-            all_items_status = [item['item_status'] for item in items]
-            if all(status == 'ready' for status in all_items_status):
-                new_order_status = 'ready'
-            elif any(status == 'ready' for status in all_items_status):
-                new_order_status = 'partially_ready'
-            else:
-                new_order_status = 'preparing'
-            
+        # Insert default admin user
+        try:
             cursor.execute('''
-                UPDATE orders 
-                SET items = ?, status = ?, status_updated_at = CURRENT_TIMESTAMP 
-                WHERE order_id = ?
-            ''', (json.dumps(items), new_order_status, order_id))
-            
-            self.conn.commit()
-            return True
-        return False
-    
-    def get_customer_order(self, order_id):
-        cursor = self.conn.cursor()
-        cursor.execute('SELECT * FROM orders WHERE order_id = ?', (order_id,))
-        result = cursor.fetchone()
+                INSERT OR IGNORE INTO users (username, password, role) 
+                VALUES (?, ?, ?)
+            ''', ('admin', hashlib.sha256('admin123'.encode()).hexdigest(), 'admin'))
+        except sqlite3.IntegrityError:
+            pass
         
-        if result:
+        # Insert sample staff
+        try:
+            cursor.execute('''
+                INSERT OR IGNORE INTO users (username, password, role) 
+                VALUES (?, ?, ?)
+            ''', ('chef', hashlib.sha256('chef123'.encode()).hexdigest(), 'chef'))
+        except sqlite3.IntegrityError:
+            pass
+        
+        # Check if menu items already exist
+        cursor.execute('SELECT COUNT(*) FROM menu_items')
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            # Insert sample menu items only if table is empty
+            sample_items = [
+                ('Truffle Pasta', 'Creamy pasta with black truffle and parmesan cheese', 245, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400'),
+                ('Grilled Salmon', 'Atlantic salmon with lemon butter sauce and vegetables', 320, 'Main Course', 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?ixlib=rb-4.0.3&w=400'),
+                ('Caesar Salad', 'Fresh romaine lettuce with caesar dressing and croutons', 95, 'Appetizer', 'https://images.unsplash.com/photo-1546793665-c74683f339c1?ixlib=rb-4.0.3&w=400'),
+                ('Margherita Pizza', 'Classic pizza with tomato sauce and fresh mozzarella', 185, 'Main Course', 'https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?ixlib=rb-4.0.3&w=400'),
+                ('Garlic Bread', 'Toasted bread with garlic butter and herbs', 45, 'Appetizer', 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?ixlib=rb-4.0.3&w=400'),
+                ('Chocolate Lava Cake', 'Warm chocolate cake with vanilla ice cream', 85, 'Dessert', 'https://images.unsplash.com/photo-1624353365286-3f8d62daad51?ixlib=rb-4.0.3&w=400'),
+                ('Mojito', 'Fresh mint and lime cocktail with rum', 65, 'Beverage', 'https://images.unsplash.com/photo-1551538827-9c037cb4f32a?ixlib=rb-4.0.3&w=400'),
+                ('Tiramisu', 'Italian coffee-flavored dessert with mascarpone', 75, 'Dessert', 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?ixlib=rb-4.0.3&w=400'),
+                ('Cappuccino', 'Freshly brewed coffee with steamed milk foam', 35, 'Beverage', 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?ixlib=rb-4.0.3&w=400'),
+                ('Beef Burger', 'Juicy beef patty with fresh vegetables and sauce', 165, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400')
+            ]
+            
+            for item in sample_items:
+                try:
+                    cursor.execute('''
+                        INSERT INTO menu_items (name, description, price, category, image_url)
+                        VALUES (?, ?, ?, ?, ?)
+                    ''', item)
+                except sqlite3.IntegrityError:
+                    pass
+        
+        self.conn.commit()
+    
+    def get_real_analytics(self, days=30):
+        """Get real analytics data from the database"""
+        cursor = self.conn.cursor()
+        
+        try:
+            # Total revenue and orders for the period
+            cursor.execute('''
+                SELECT 
+                    COUNT(*) as total_orders,
+                    COALESCE(SUM(total_amount), 0) as total_revenue,
+                    COALESCE(AVG(total_amount), 0) as avg_order_value
+                FROM orders 
+                WHERE order_date >= date('now', '-' || ? || ' days')
+            ''', (days,))
+            totals = cursor.fetchone()
+            
+            # Daily revenue trend
+            cursor.execute('''
+                SELECT 
+                    date(order_date) as order_day,
+                    COUNT(*) as daily_orders,
+                    COALESCE(SUM(total_amount), 0) as daily_revenue
+                FROM orders 
+                WHERE order_date >= date('now', '-' || ? || ' days')
+                GROUP BY order_day
+                ORDER BY order_day
+            ''', (days,))
+            daily_data = cursor.fetchall()
+            
+            # Weekly revenue by day of week
+            cursor.execute('''
+                SELECT 
+                    strftime('%w', order_date) as weekday,
+                    COUNT(*) as order_count,
+                    COALESCE(SUM(total_amount), 0) as daily_revenue
+                FROM orders 
+                WHERE order_date >= date('now', '-' || ? || ' days')
+                GROUP BY weekday
+                ORDER BY weekday
+            ''', (days,))
+            weekly_data = cursor.fetchall()
+            
+            # Popular dishes
+            cursor.execute('''
+                SELECT 
+                    oi.menu_item_name,
+                    SUM(oi.quantity) as total_quantity,
+                    COUNT(DISTINCT oi.order_id) as order_count
+                FROM order_items oi
+                JOIN orders o ON oi.order_id = o.id
+                WHERE o.order_date >= date('now', '-' || ? || ' days')
+                GROUP BY oi.menu_item_name
+                ORDER BY total_quantity DESC
+                LIMIT 10
+            ''', (days,))
+            popular_dishes = cursor.fetchall()
+            
+            # Category distribution (NEW - based on menu categories)
+            cursor.execute('''
+                SELECT 
+                    mi.category,
+                    SUM(oi.quantity) as total_quantity,
+                    COUNT(DISTINCT oi.order_id) as order_count
+                FROM order_items oi
+                JOIN orders o ON oi.order_id = o.id
+                JOIN menu_items mi ON oi.menu_item_id = mi.id
+                WHERE o.order_date >= date('now', '-' || ? || ' days')
+                GROUP BY mi.category
+                ORDER BY total_quantity DESC
+            ''', (days,))
+            category_distribution = cursor.fetchall()
+            
             return {
-                'id': result[0],
-                'order_id': result[1],
-                'table_number': result[2],
-                'customer_name': result[3],
-                'order_type': result[4] if len(result) > 4 else 'dine_in',
-                'items': json.loads(result[5]),
-                'total_amount': result[6],
-                'status': result[7],
-                'created_at': result[8],
-                'status_updated_at': result[9] if len(result) > 9 else result[8]
+                'totals': totals,
+                'daily_trend': daily_data,
+                'weekly_revenue': weekly_data,
+                'popular_dishes': popular_dishes,
+                'category_distribution': category_distribution  # NEW
             }
-        return None
+            
+        except Exception as e:
+            st.error(f"Error in get_real_analytics: {e}")
+            return None
     
-    def get_analytics(self, days=7):
+    def get_todays_orders_count(self):
+        """Get count of orders from today only"""
         cursor = self.conn.cursor()
+        try:
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM orders 
+                WHERE date(order_date) = date('now')
+            ''')
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            st.error(f"Error getting today's orders: {e}")
+            return 0
+    
+    def get_all_orders(self, status_filter=None):
+        cursor = self.conn.cursor()
+        query = '''
+            SELECT o.*, 
+                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
+                   COUNT(oi.id) as item_count
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+        '''
+        if status_filter:
+            query += f" WHERE o.status = '{status_filter}'"
+        query += " GROUP BY o.id ORDER BY o.order_date DESC"
+        
+        cursor.execute(query)
+        return cursor.fetchall()
+    
+    def get_menu_items(self, category=None):
+        cursor = self.conn.cursor()
+        query = 'SELECT * FROM menu_items WHERE available = 1'
+        if category:
+            query += f" AND category = '{category}'"
+        query += " ORDER BY category, name"
+        
+        cursor.execute(query)
+        return cursor.fetchall()
+    
+    def add_order(self, customer_name, order_type, items, table_number=None, notes=""):
+        cursor = self.conn.cursor()
+        total_amount = sum(item['price'] * item['quantity'] for item in items)
+        
+        # Generate unique order token
+        order_token = f"ORD{random.randint(1000, 9999)}{int(time.time()) % 10000}"
         
         cursor.execute('''
-            SELECT item_name, category, SUM(quantity) as total_quantity, SUM(revenue) as total_revenue
-            FROM analytics 
-            WHERE date >= date('now', ?) 
-            GROUP BY item_name, category
-            ORDER BY total_quantity DESC
-        ''', (f'-{days} days',))
+            INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (customer_name, order_type, table_number, total_amount, notes, order_token))
         
-        popular_items = []
-        for row in cursor.fetchall():
-            popular_items.append({
-                'item_name': row[0],
-                'category': row[1],
-                'total_quantity': row[2],
-                'total_revenue': row[3]
-            })
+        order_id = cursor.lastrowid
+        
+        for item in items:
+            cursor.execute('''
+                INSERT INTO order_items (order_id, menu_item_id, menu_item_name, quantity, price, special_instructions)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (order_id, item['id'], item['name'], item['quantity'], item['price'], item.get('instructions', '')))
+        
+        # Add initial status to history
+        cursor.execute('''
+            INSERT INTO order_status_history (order_id, status, notes)
+            VALUES (?, ?, ?)
+        ''', (order_id, 'pending', 'Order placed by customer'))
+        
+        self.conn.commit()
+        return order_id, order_token
+    
+    def update_order_status(self, order_id, new_status, notes=""):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE orders SET status = ? WHERE id = ?
+        ''', (new_status, order_id))
         
         cursor.execute('''
-            SELECT hour, COUNT(*) as order_count, SUM(revenue) as total_revenue
-            FROM analytics 
-            WHERE date >= date('now', ?)
-            GROUP BY hour
-            ORDER BY hour
-        ''', (f'-{days} days',))
+            INSERT INTO order_status_history (order_id, status, notes)
+            VALUES (?, ?, ?)
+        ''', (order_id, new_status, notes))
         
-        busy_hours = []
-        for row in cursor.fetchall():
-            busy_hours.append({
-                'hour': row[0],
-                'order_count': row[1],
-                'total_revenue': row[2]
-            })
-        
-        return {
-            'popular_items': popular_items,
-            'busy_hours': busy_hours
-        }
-
-# Configuration
-MENU_CATEGORIES = {
-    "burgers": {
-        "name": "🍔 Burgers",
-        "icon": "🍔",
-        "color": "#FF6B35",
-        "items": {
-            "classic_burger": {"name": "Classic Beef Burger", "price": 89.99, "prep_time": 12},
-            "cheese_burger": {"name": "Cheese Burger", "price": 99.99, "prep_time": 15},
-            "chicken_burger": {"name": "Grilled Chicken Burger", "price": 94.99, "prep_time": 10},
-            "veg_burger": {"name": "Vegetarian Burger", "price": 79.99, "prep_time": 8}
-        }
-    },
-    "meals": {
-        "name": "🍛 Full Meals", 
-        "icon": "🍛",
-        "color": "#28A745",
-        "items": {
-            "steak_meal": {"name": "Steak & Chips", "price": 149.99, "prep_time": 20},
-            "chicken_meal": {"name": "Grilled Chicken Meal", "price": 119.99, "prep_time": 18},
-            "fish_meal": {"name": "Fish & Chips", "price": 109.99, "prep_time": 15},
-            "veg_meal": {"name": "Vegetarian Platter", "price": 89.99, "prep_time": 12}
-        }
-    },
-    "beverages": {
-        "name": "🥤 Beverages",
-        "icon": "🥤",
-        "color": "#17A2B8", 
-        "items": {
-            "coke": {"name": "Coca-Cola", "price": 19.99, "prep_time": 2},
-            "sprite": {"name": "Sprite", "price": 19.99, "prep_time": 2},
-            "juice": {"name": "Fresh Orange Juice", "price": 29.99, "prep_time": 3},
-            "water": {"name": "Bottled Water", "price": 15.99, "prep_time": 1},
-            "coffee": {"name": "Coffee", "price": 24.99, "prep_time": 5}
-        }
-    },
-    "veggies": {
-        "name": "🥗 Sides & Salads",
-        "icon": "🥗",
-        "color": "#20C997",
-        "items": {
-            "fries": {"name": "French Fries", "price": 29.99, "prep_time": 8},
-            "salad": {"name": "Garden Salad", "price": 39.99, "prep_time": 5},
-            "coleslaw": {"name": "Coleslaw", "price": 24.99, "prep_time": 3}
-        }
-    }
-}
-
-ITEM_STATUS = {
-    "pending": {"text": "⏳ Pending", "color": "#6C757D"},
-    "preparing": {"text": "👨‍🍳 Preparing", "color": "#FFC107"}, 
-    "ready": {"text": "✅ Ready", "color": "#28A745"},
-    "served": {"text": "🎉 Served", "color": "#17A2B8"}
-}
-
-ORDER_TYPES = {
-    "dine_in": {"name": "🪑 Dine In", "icon": "🪑"},
-    "takeaway": {"name": "🥡 Takeaway", "icon": "🥡"}
-}
-
-# Authentication
-def check_staff_login():
-    if 'staff_logged_in' not in st.session_state:
-        st.session_state.staff_logged_in = False
-    return st.session_state.staff_logged_in
-
-def staff_login():
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🔐 Staff Login")
+        self.conn.commit()
+        return True
     
-    password = st.sidebar.text_input("Staff Password", type="password")
-    if st.sidebar.button("Login", key="staff_login"):
-        if password == "staff123":
-            st.session_state.staff_logged_in = True
-            st.rerun()
-        else:
-            st.sidebar.error("Incorrect password")
+    def get_order_by_token(self, order_token):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT o.*, 
+                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
+                   o.notes as order_notes
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.order_token = ?
+            GROUP BY o.id
+        ''', (order_token,))
+        return cursor.fetchone()
     
-    return st.session_state.staff_logged_in
+    def get_order_status_history(self, order_id):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT * FROM order_status_history 
+            WHERE order_id = ? 
+            ORDER BY created_at DESC
+        ''', (order_id,))
+        return cursor.fetchall()
+    
+    def get_order_status(self, order_token):
+        """Get just the current status of an order for live updates"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT status FROM orders WHERE order_token = ?
+        ''', (order_token,))
+        result = cursor.fetchone()
+        return result[0] if result else None
 
 # Initialize database
-db = RestaurantDB()
+try:
+    db = RestaurantDB()
+except Exception as e:
+    st.error(f"Database initialization error: {e}")
+    import sqlite3
+    conn = sqlite3.connect("restaurant.db", check_same_thread=False)
+    db = type('obj', (object,), {'conn': conn})
 
-# Page configuration
-st.set_page_config(
-    page_title="Restaurant QR Ordering",
-    page_icon="🍔",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# QR Code Generator
+def generate_qr_code(url, size=300):
+    """Generate QR code for the given URL"""
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_L,
+        box_size=10,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Convert to bytes
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode()
+    
+    return img_str
 
-# Load custom CSS
-def load_css():
-    st.markdown("""
-    <style>
-    .main-header {
-        font-size: 3rem;
-        background: linear-gradient(135deg, #FF6B35, #F7931E);
-        background-clip: text;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 2rem;
-        font-weight: bold;
-    }
-    .order-card {
-        padding: 1.5rem;
-        border-radius: 15px;
-        background-color: white;
-        color: black;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        margin-bottom: 1rem;
-        border-left: 5px solid;
-        transition: transform 0.2s ease;
-        border: 1px solid #E0E0E0;
-    }
-    .order-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-    }
-    .status-pending { border-left-color: #6C757D; }
-    .status-preparing { border-left-color: #FFC107; }
-    .status-partially_ready { border-left-color: #17A2B8; }
-    .status-ready { border-left-color: #28A745; }
-    .status-completed { border-left-color: #20C997; }
-    .menu-category {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        padding: 1rem;
-        border-radius: 10px;
-        margin: 1rem 0;
-    }
-    .menu-item-card {
-        background-color: #FFFFFF;
-        color: #000000;
-        border-radius: 10px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        border: 1px solid #E0E0E0;
-    }
-    .item-status-badge {
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
-        font-weight: bold;
-        display: inline-block;
-        margin: 0.25rem;
-    }
-    .customer-view {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        min-height: 100vh;
-        padding: 2rem;
-    }
-    .staff-view {
-        background: #f8f9fa;
-        min-height: 100vh;
-    }
-    .stButton>button {
-        border-radius: 10px;
-        font-weight: bold;
-        border: none;
-        transition: all 0.3s ease;
-    }
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-    }
-    .progress-container {
-        background: #e9ecef;
-        border-radius: 10px;
-        height: 10px;
-        margin: 1rem 0;
-    }
-    .progress-bar {
-        height: 100%;
-        border-radius: 10px;
-        background: linear-gradient(135deg, #FF6B35, #F7931E);
-        transition: width 0.5s ease;
-    }
-    .menu-item-card h4, .menu-item-card p {
-        color: #000000 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+def get_qr_download_link(img_str, filename="sanele_ordering_qr.png"):
+    """Generate download link for QR code"""
+    href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📱 Download QR Code</a>'
+    return href
 
-load_css()
-
-def main():
-    query_params = st.query_params
-    order_id = query_params.get('order_id', [None])[0]
-    table_number = query_params.get('table', [None])[0]
+# Authentication for staff
+def staff_login():
+    st.sidebar.title("Staff Login")
+    username = st.sidebar.text_input("Username")
+    password = st.sidebar.text_input("Password", type="password")
     
-    if order_id:
-        customer_order_tracking(order_id)
-    elif table_number:
-        customer_ordering(table_number)
-    else:
-        show_main_navigation()
-
-def show_main_navigation():
-    is_staff = check_staff_login()
-    
-    if not is_staff:
-        if staff_login():
-            st.rerun()
-    
-    st.sidebar.title("🍔 Restaurant Dashboard")
-    
-    if is_staff:
-        orders = db.get_orders()
-        st.sidebar.info(f"Total orders in system: {len(orders)}")
-    
-    if is_staff:
-        app_mode = st.sidebar.selectbox(
-            "Staff Menu",
-            ["👨‍🍳 Kitchen Display", "📊 Analytics", "🎯 QR Manager", "🚪 Logout"]
-        )
-        
-        if app_mode == "🚪 Logout":
-            st.session_state.staff_logged_in = False
-            st.rerun()
-        elif app_mode == "👨‍🍳 Kitchen Display":
-            kitchen_display()
-        elif app_mode == "📊 Analytics":
-            analytics_dashboard()
-        elif app_mode == "🎯 QR Manager":
-            qr_generator()
-    else:
-        st.markdown('<div class="customer-view">', unsafe_allow_html=True)
-        customer_ordering()
-        st.markdown('</div>', unsafe_allow_html=True)
-
-def customer_ordering(prefilled_table=None):
-    st.markdown('<div class="main-header">🍔 Welcome to Our Restaurant!</div>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        order_type = st.radio(
-            "Order Type",
-            options=list(ORDER_TYPES.keys()),
-            format_func=lambda x: ORDER_TYPES[x]['name'],
-            horizontal=True
-        )
-    
-    with col2:
-        if order_type == 'dine_in':
-            table_number = st.number_input(
-                "Table Number", 
-                min_value=1, 
-                max_value=50, 
-                value=int(prefilled_table) if prefilled_table else 1
-            )
-        else:
-            table_number = None
-            st.info("🥡 Takeaway order - no table needed")
-    
-    customer_name = st.text_input("Your Name (Optional)", placeholder="Enter your name for the order")
-    
-    st.markdown("---")
-    
-    order_items = []
-    total_amount = 0
-    
-    for category_id, category_data in MENU_CATEGORIES.items():
-        st.markdown(f'''
-            <div class="menu-category">
-                <h3>{category_data['icon']} {category_data['name']}</h3>
-            </div>
-        ''', unsafe_allow_html=True)
-        
-        cols = st.columns(3)
-        col_idx = 0
-        
-        for item_id, item_data in category_data['items'].items():
-            with cols[col_idx]:
-                with st.container():
-                    st.markdown(f'''
-                        <div class="menu-item-card">
-                            <h4 style="color: #000000 !important;">{item_data['name']}</h4>
-                            <p style="color: #000000 !important;">💰 R{item_data['price']:.2f}</p>
-                            <p style="color: #000000 !important;">⏱️ ~{item_data['prep_time']}min</p>
-                        </div>
-                    ''', unsafe_allow_html=True)
-                    
-                    quantity = st.number_input(
-                        f"Quantity of {item_data['name']}",
-                        min_value=0,
-                        max_value=10,
-                        value=0,
-                        key=f"{category_id}_{item_id}",
-                        label_visibility="collapsed"
-                    )
-                    
-                    if quantity > 0:
-                        order_items.append({
-                            'id': item_id,
-                            'name': item_data['name'],
-                            'price': item_data['price'],
-                            'quantity': quantity,
-                            'category': category_data['name'],
-                            'prep_time': item_data['prep_time']
-                        })
-                        total_amount += item_data['price'] * quantity
+    if st.sidebar.button("Login"):
+        if username and password:
+            cursor = db.conn.cursor()
+            hashed_password = hashlib.sha256(password.encode()).hexdigest()
+            cursor.execute('SELECT * FROM users WHERE username = ? AND password = ?', (username, hashed_password))
+            user = cursor.fetchone()
             
-            col_idx = (col_idx + 1) % 3
-        st.markdown("---")
-    
-    if order_items:
-        st.subheader("📋 Order Summary")
-        
-        summary_df = pd.DataFrame(order_items)
-        st.dataframe(summary_df[['name', 'quantity', 'price']], hide_index=True)
-        
-        st.markdown(f"### 💰 Total Amount: R{total_amount:.2f}")
-        
-        if st.button("🚀 Place Order", type="primary", use_container_width=True):
-            if total_amount > 0:
-                try:
-                    order_id = db.create_order(
-                        table_number, 
-                        customer_name, 
-                        order_items, 
-                        total_amount, 
-                        order_type
-                    )
-                    
-                    show_order_confirmation(order_id, table_number, customer_name, order_type, order_items)
-                except Exception as e:
-                    st.error(f"Error creating order: {e}")
+            if user:
+                st.session_state.user = user
+                st.session_state.logged_in = True
+                st.session_state.role = user[3]
+                st.rerun()
             else:
-                st.error("Please add items to your order before submitting.")
+                st.sidebar.error("Invalid credentials")
+        else:
+            st.sidebar.warning("Please enter both username and password")
 
-def show_order_confirmation(order_id, table_number, customer_name, order_type, order_items):
-    st.success("🎉 Order placed successfully!")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.info(f"**Order ID:** `{order_id}`")
-        if order_type == 'dine_in':
-            st.info(f"**Table:** {table_number}")
-        st.info(f"**Customer:** {customer_name if customer_name else 'Not provided'}")
-        st.info(f"**Order Type:** {ORDER_TYPES[order_type]['name']}")
-        
-        max_prep_time = max(item['prep_time'] for item in order_items)
-        st.info(f"**Estimated wait time:** ~{max_prep_time} minutes")
-    
-    with col2:
-        tracking_url = f"https://myfood.streamlit.app/?order_id={order_id}"
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(tracking_url)
-        qr.make(fit=True)
-        qr_img = qr.make_image(fill_color="black", back_color="white")
-        
-        buffered = io.BytesIO()
-        qr_img.save(buffered, format="PNG")
-        st.image(buffered, width=200)
-        st.caption("Scan to track your order")
-    
-    st.markdown("---")
-    st.subheader("📱 Live Order Tracking")
-    st.write("**Your order status will update here in real-time:**")
-    
-    status_placeholder = st.empty()
-    items_placeholder = st.empty()
-    
-    for i in range(120):
-        order = db.get_customer_order(order_id)
-        
-        if order:
-            display_order_status(order, status_placeholder, items_placeholder)
-        
-        time.sleep(2)
+def logout():
+    st.session_state.logged_in = False
+    st.session_state.user = None
+    st.rerun()
 
-def display_order_status(order, status_placeholder, items_placeholder):
-    with status_placeholder.container():
-        status_display = "⏳ Order Received"
-        if order['status'] == 'preparing':
-            status_display = "👨‍🍳 Preparing Your Order"
-        elif order['status'] == 'partially_ready':
-            status_display = "🎉 Some Items Ready!"
-        elif order['status'] == 'ready':
-            status_display = "✅ Order Ready for Pickup!"
-        
-        st.markdown(f"### {status_display}")
-        
-        progress = 0.25
-        if order['status'] == 'preparing':
-            progress = 0.5
-        elif order['status'] == 'partially_ready':
-            progress = 0.75
-        elif order['status'] == 'ready':
-            progress = 1.0
-            
-        st.markdown(f'''
-            <div class="progress-container">
-                <div class="progress-bar" style="width: {progress * 100}%"></div>
-            </div>
-        ''', unsafe_allow_html=True)
-    
-    with items_placeholder.container():
-        st.write("**Item Status:**")
-        for item in order['items']:
-            status_info = ITEM_STATUS.get(item['item_status'], ITEM_STATUS['pending'])
-            st.markdown(f'''
-                <div style="display: flex; justify-content: space-between; align-items: center; margin: 0.5rem 0; padding: 0.5rem; background-color: white; border-radius: 8px; border: 1px solid #E0E0E0;">
-                    <span style="color: black;">{item['name']} (x{item['quantity']})</span>
-                    <span class="item-status-badge" style="background-color: {status_info['color']}20; color: {status_info['color']}; border: 1px solid {status_info['color']};">
-                        {status_info['text']}
-                    </span>
-                </div>
-            ''', unsafe_allow_html=True)
+# Initialize session state variables
+def init_session_state():
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'user' not in st.session_state:
+        st.session_state.user = None
+    if 'current_step' not in st.session_state:
+        st.session_state.current_step = "order_type"
+    if 'order_type' not in st.session_state:
+        st.session_state.order_type = "dine-in"
+    if 'customer_name' not in st.session_state:
+        st.session_state.customer_name = ""
+    if 'table_number' not in st.session_state:
+        st.session_state.table_number = 1
+    if 'order_notes' not in st.session_state:
+        st.session_state.order_notes = ""
+    if 'cart' not in st.session_state:
+        st.session_state.cart = []
+    if 'order_placed' not in st.session_state:
+        st.session_state.order_placed = False
+    if 'order_id' not in st.session_state:
+        st.session_state.order_id = None
+    if 'order_token' not in st.session_state:
+        st.session_state.order_token = None
+    if 'last_status_check' not in st.session_state:
+        st.session_state.last_status_check = None
+    if 'current_order_status' not in st.session_state:
+        st.session_state.current_order_status = None
 
-def customer_order_tracking(order_id):
-    st.markdown('<div class="customer-view">', unsafe_allow_html=True)
+# Customer Ordering Interface
+def customer_ordering():
+    st.title("🍽️ Place Your Order")
     
-    order = db.get_customer_order(order_id)
+    # Initialize session state
+    init_session_state()
     
-    if not order:
-        st.error("Order not found. Please check your Order ID.")
-        return
+    # Step 1: Order Type Selection
+    if st.session_state.current_step == "order_type":
+        show_order_type_selection()
     
-    st.markdown(f'<div class="main-header">📱 Order Tracking</div>', unsafe_allow_html=True)
+    # Step 2: Customer Information
+    elif st.session_state.current_step == "customer_info":
+        show_customer_info()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"**Order ID:** `{order_id}`")
-        if order['order_type'] == 'dine_in':
-            st.info(f"**Table:** {order['table_number']}")
-        st.info(f"**Customer:** {order['customer_name'] or 'Not provided'}")
+    # Step 3: Menu Selection
+    elif st.session_state.current_step == "menu":
+        show_menu_selection()
     
-    with col2:
-        st.info(f"**Order Type:** {ORDER_TYPES[order['order_type']]['name']}")
-        st.info(f"**Total:** R{order['total_amount']:.2f}")
-        st.info(f"**Order Time:** {order['created_at']}")
+    # Step 4: Order Confirmation
+    elif st.session_state.current_step == "confirmation":
+        show_order_confirmation()
     
-    status_placeholder = st.empty()
-    items_placeholder = st.empty()
-    
-    while True:
-        order = db.get_customer_order(order_id)
-        if order:
-            display_order_status(order, status_placeholder, items_placeholder)
-        time.sleep(3)
+    # Step 5: Order Tracking
+    elif st.session_state.current_step == "tracking":
+        track_order()
 
-def kitchen_display():
-    st.markdown('<div class="staff-view">', unsafe_allow_html=True)
-    st.markdown('<div class="main-header">👨‍🍳 Kitchen Command Center</div>', unsafe_allow_html=True)
-    
-    orders = db.get_orders()
-    st.info(f"📊 Total orders in system: {len(orders)}")
-    st.info(f"👨‍🍳 Active orders: {len([o for o in orders if o['status'] != 'completed'])}")
-    
-    auto_refresh = st.checkbox("🔄 Auto-refresh", value=True)
-    
-    if auto_refresh:
-        time.sleep(3)
-        st.rerun()
-    
-    active_orders = [order for order in orders if order['status'] != 'completed']
-    
-    if not active_orders:
-        st.info("No active orders. Time for a break! ☕")
-        return
+def show_order_type_selection():
+    st.subheader("Choose Order Type")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.subheader("📥 New Orders")
-        display_orders_by_status(active_orders, 'received', col1)
+        if st.button("🏠 Dine In", use_container_width=True, key="dine_in_btn"):
+            st.session_state.order_type = "dine-in"
+            st.session_state.current_step = "customer_info"
+            st.rerun()
     
     with col2:
-        st.subheader("👨‍🍳 In Progress")
-        display_orders_by_status(active_orders, 'preparing', col2)
-        display_orders_by_status(active_orders, 'partially_ready', col2)
+        if st.button("🥡 Takeaway", use_container_width=True, key="takeaway_btn"):
+            st.session_state.order_type = "takeaway"
+            st.session_state.current_step = "customer_info"
+            st.rerun()
     
     with col3:
-        st.subheader("✅ Ready")
-        display_orders_by_status(active_orders, 'ready', col3)
+        if st.button("🚚 Delivery", use_container_width=True, key="delivery_btn"):
+            st.session_state.order_type = "delivery"
+            st.session_state.current_step = "customer_info"
+            st.rerun()
+    
+    st.write(f"Selected: **{st.session_state.order_type.title()}**")
 
-def display_orders_by_status(orders, status, column):
-    filtered_orders = [order for order in orders if order['status'] == status]
+def show_customer_info():
+    st.subheader("Customer Information")
     
-    if not filtered_orders:
-        column.info(f"No {status} orders")
-        return
+    with st.form("customer_info_form"):
+        customer_name = st.text_input(
+            "Your Name", 
+            value=st.session_state.customer_name,
+            placeholder="Enter your name",
+            key="customer_name_input"
+        )
+        
+        if st.session_state.order_type == "dine-in":
+            table_number = st.number_input(
+                "Table Number", 
+                min_value=1, 
+                max_value=50, 
+                value=st.session_state.table_number,
+                key="table_number_input"
+            )
+        else:
+            table_number = None
+        
+        order_notes = st.text_area(
+            "Special Instructions", 
+            value=st.session_state.order_notes,
+            placeholder="Any allergies or special requests...",
+            key="order_notes_input"
+        )
+        
+        submitted = st.form_submit_button("Continue to Menu")
+        
+        if submitted:
+            if not customer_name:
+                st.error("Please provide your name")
+            else:
+                # Store in session state
+                st.session_state.customer_name = customer_name
+                st.session_state.table_number = table_number
+                st.session_state.order_notes = order_notes
+                st.session_state.current_step = "menu"
+                st.rerun()
+
+def show_menu_selection():
+    st.title("📋 Our Menu")
     
-    for order in filtered_orders:
-        with column:
-            status_class = f"status-{status}"
+    # Menu categories
+    categories = ['All', 'Appetizer', 'Main Course', 'Dessert', 'Beverage']
+    selected_category = st.selectbox("Filter by Category", categories, key="category_filter")
+    
+    # Get menu items
+    try:
+        menu_items = db.get_menu_items(None if selected_category == 'All' else selected_category)
+    except:
+        # Fallback if database error
+        menu_items = [
+            (1, 'Truffle Pasta', 'Creamy pasta with black truffle and parmesan', 245, 'Main Course', 1, 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=400'),
+            (2, 'Grilled Salmon', 'Atlantic salmon with lemon butter sauce', 320, 'Main Course', 1, 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400'),
+            (3, 'Caesar Salad', 'Fresh romaine with caesar dressing', 95, 'Appetizer', 1, 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400')
+        ]
+    
+    # Display menu items in a grid
+    cols = st.columns(2)
+    for idx, item in enumerate(menu_items):
+        with cols[idx % 2]:
             with st.container():
-                st.markdown(f'<div class="order-card {status_class}">', unsafe_allow_html=True)
+                st.markdown("---")
                 
-                st.write(f"**Order:** `{order['order_id']}`")
-                st.write(f"**Type:** {ORDER_TYPES[order['order_type']]['name']}")
-                if order['order_type'] == 'dine_in':
-                    st.write(f"**Table:** {order['table_number']}")
-                if order['customer_name']:
-                    st.write(f"**Customer:** {order['customer_name']}")
+                # Display food image
+                image_url = item[6] if len(item) > 6 and item[6] else "https://via.placeholder.com/300x200"
+                try:
+                    st.image(image_url, use_container_width=True)
+                except:
+                    st.image("https://via.placeholder.com/300x200", use_container_width=True)
                 
-                st.write("---")
+                # Item details
+                st.subheader(item[1])
+                st.write(item[2])
+                st.write(f"**R {item[3]}**")
                 
-                st.write("**Items:**")
-                for item in order['items']:
-                    col_item1, col_item2 = st.columns([3, 2])
-                    
-                    with col_item1:
-                        st.write(f"- {item['name']} (x{item['quantity']})")
-                    
-                    with col_item2:
-                        current_status = item.get('item_status', 'pending')
-                        status_info = ITEM_STATUS.get(current_status, ITEM_STATUS['pending'])
-                        
-                        if current_status == 'pending':
-                            if st.button("Start", key=f"start_{item['item_id']}", use_container_width=True):
-                                db.update_item_status(order['order_id'], item['item_id'], 'preparing')
-                                st.rerun()
-                        elif current_status == 'preparing':
-                            if st.button("Ready", key=f"ready_{item['item_id']}", use_container_width=True):
-                                db.update_item_status(order['order_id'], item['item_id'], 'ready')
-                                st.rerun()
-                        elif current_status == 'ready':
-                            st.success("✅ Ready")
+                # Quantity and add to cart
+                col1, col2 = st.columns(2)
+                with col1:
+                    quantity = st.number_input("Qty", min_value=0, max_value=10, key=f"qty_{item[0]}")
+                with col2:
+                    instructions = st.text_input("Instructions", key=f"inst_{item[0]}", placeholder="e.g., no onions")
                 
-                st.markdown('</div>', unsafe_allow_html=True)
+                if quantity > 0:
+                    if st.button("Add to Cart", key=f"add_{item[0]}"):
+                        cart_item = {
+                            'id': item[0],
+                            'name': item[1],
+                            'price': item[3],
+                            'quantity': quantity,
+                            'instructions': instructions
+                        }
+                        st.session_state.cart.append(cart_item)
+                        st.success(f"Added {quantity} x {item[1]} to cart!")
+                        st.rerun()
+    
+    # Display cart and navigation
+    show_cart_and_navigation()
 
-def analytics_dashboard():
-    st.markdown('<div class="staff-view">', unsafe_allow_html=True)
-    st.markdown('<div class="main-header">📊 Restaurant Analytics</div>', unsafe_allow_html=True)
-    
-    days = st.slider("Analysis Period (days)", min_value=1, max_value=30, value=7)
-    
-    analytics_data = db.get_analytics(days)
-    
-    if not analytics_data['popular_items']:
-        st.info("No data available for the selected period.")
-        return
-    
-    tab1, tab2, tab3 = st.tabs(["📈 Sales Performance", "🕒 Busy Hours", "📋 Detailed Reports"])
-    
-    with tab1:
-        popular_df = pd.DataFrame(analytics_data['popular_items'])
+def show_cart_and_navigation():
+    if st.session_state.cart:
+        st.markdown("---")
+        st.subheader("🛒 Your Order")
         
-        if not popular_df.empty:
-            col1, col2 = st.columns(2)
-            
+        total = 0
+        for i, item in enumerate(st.session_state.cart):
+            col1, col2, col3, col4 = st.columns([3, 1, 1, 1])
             with col1:
-                fig_items = px.bar(
-                    popular_df.head(10),
-                    x='total_quantity',
-                    y='item_name',
-                    orientation='h',
-                    title="Top 10 Most Ordered Items",
-                    labels={'total_quantity': 'Quantity Sold', 'item_name': 'Item'}
-                )
-                st.plotly_chart(fig_items, use_container_width=True)
-            
+                st.write(f"**{item['name']}**")
+                if item['instructions']:
+                    st.caption(f"Instructions: {item['instructions']}")
             with col2:
-                fig_revenue = px.pie(
-                    popular_df,
-                    values='total_revenue',
-                    names='category',
-                    title="Revenue by Category"
-                )
-                st.plotly_chart(fig_revenue, use_container_width=True)
-    
-    with tab2:
-        busy_df = pd.DataFrame(analytics_data['busy_hours'])
+                st.write(f"R {item['price']}")
+            with col3:
+                st.write(f"Qty: {item['quantity']}")
+            with col4:
+                if st.button("❌", key=f"remove_{i}"):
+                    st.session_state.cart.pop(i)
+                    st.rerun()
+            
+            total += item['price'] * item['quantity']
         
-        if not busy_df.empty:
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                fig_hours = px.line(
-                    busy_df,
-                    x='hour',
-                    y='order_count',
-                    title="Order Volume by Hour",
-                    labels={'hour': 'Hour of Day', 'order_count': 'Number of Orders'}
-                )
-                st.plotly_chart(fig_hours, use_container_width=True)
-            
-            with col2:
-                fig_revenue_hours = px.bar(
-                    busy_df,
-                    x='hour',
-                    y='total_revenue',
-                    title="Revenue by Hour",
-                    labels={'hour': 'Hour of Day', 'total_revenue': 'Revenue (R)'}
-                )
-                st.plotly_chart(fig_revenue_hours, use_container_width=True)
-    
-    with tab3:
-        st.subheader("Detailed Sales Data")
+        st.write(f"### Total: R {total}")
         
         col1, col2 = st.columns(2)
-        
         with col1:
-            st.write("**Top Selling Items**")
-            popular_df = pd.DataFrame(analytics_data['popular_items'])
-            st.dataframe(
-                popular_df[['item_name', 'category', 'total_quantity', 'total_revenue']],
-                use_container_width=True
-            )
+            if st.button("← Back to Customer Info", use_container_width=True):
+                st.session_state.current_step = "customer_info"
+                st.rerun()
         
         with col2:
-            st.write("**Hourly Performance**")
-            busy_df = pd.DataFrame(analytics_data['busy_hours'])
-            st.dataframe(
-                busy_df[['hour', 'order_count', 'total_revenue']],
-                use_container_width=True
-            )
+            if st.button("📦 Place Order", type="primary", use_container_width=True):
+                st.session_state.current_step = "confirmation"
+                st.rerun()
+    else:
+        if st.button("← Back to Customer Info"):
+            st.session_state.current_step = "customer_info"
+            st.rerun()
 
-def qr_generator():
-    st.markdown('<div class="staff-view">', unsafe_allow_html=True)
-    st.markdown('<div class="main-header">🎯 QR Code Generator</div>', unsafe_allow_html=True)
+def show_order_confirmation():
+    st.title("📦 Order Confirmation")
     
-    st.info("Generate QR codes for tables that customers can scan to start ordering")
+    # Display order summary
+    st.subheader("Order Summary")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.write(f"**Customer:** {st.session_state.customer_name}")
+        st.write(f"**Order Type:** {st.session_state.order_type.title()}")
+    
+    with col2:
+        if st.session_state.order_type == "dine-in":
+            st.write(f"**Table:** {st.session_state.table_number}")
+        if st.session_state.order_notes:
+            st.write(f"**Notes:** {st.session_state.order_notes}")
+    
+    st.subheader("Order Items")
+    total = 0
+    for item in st.session_state.cart:
+        item_total = item['price'] * item['quantity']
+        total += item_total
+        st.write(f"{item['quantity']} x {item['name']} - R {item_total}")
+        if item['instructions']:
+            st.caption(f"  Instructions: {item['instructions']}")
+    
+    st.write(f"**Total Amount: R {total}**")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        base_url = st.text_input(
-            "Ordering Page URL",
-            value="https://myfood.streamlit.app/",
-            help="The URL where your Streamlit app is hosted"
-        )
-        
-        table_numbers = st.text_area(
-            "Table Numbers (one per line)",
-            value="1\n2\n3\n4\n5",
-            help="Enter table numbers, one per line"
-        )
+        if st.button("← Back to Menu", use_container_width=True):
+            st.session_state.current_step = "menu"
+            st.rerun()
     
     with col2:
-        qr_size = st.slider("QR Code Size", min_value=100, max_value=300, value=150)
-        
-    st.subheader("Generated QR Codes")
-    
-    table_list = [table.strip() for table in table_numbers.split('\n') if table.strip()]
-    
-    cols = st.columns(4)
-    for idx, table_num in enumerate(table_list):
-        with cols[idx % 4]:
-            qr_img = generate_table_qr(base_url, table_num, qr_size)
-            if qr_img:
-                # FIXED: use_container_width instead of use_column_width
-                st.image(qr_img, caption=f"Table {table_num}", use_container_width=True)
+        if st.button("✅ Confirm Order", type="primary", use_container_width=True):
+            try:
+                # Save order to database
+                order_id, order_token = db.add_order(
+                    st.session_state.customer_name,
+                    st.session_state.order_type,
+                    st.session_state.cart,
+                    st.session_state.table_number,
+                    st.session_state.order_notes
+                )
+                
+                st.session_state.order_placed = True
+                st.session_state.order_id = order_id
+                st.session_state.order_token = order_token
+                st.session_state.current_order_status = 'pending'
+                
+                # Clear cart after successful order
+                st.session_state.cart = []
+                
+                st.session_state.current_step = "tracking"
+                st.rerun()
+                
+            except Exception as e:
+                st.error(f"Error placing order: {e}")
+                st.error("Please try again or contact staff for assistance.")
 
-def generate_table_qr(base_url, table_number, size=150):
+def track_order():
+    st.title("📱 Track Your Order")
+    
+    if st.session_state.get('order_placed') and st.session_state.get('order_token'):
+        # Use the order token from the current order
+        order_token = st.session_state.order_token
+        display_order_tracking(order_token)
+    else:
+        # Allow manual order token entry
+        st.info("Enter your Order Token to track your order status")
+        order_token = st.text_input("Order Token", placeholder="ORD123456789", key="track_order_input")
+        
+        if st.button("Track Order", key="track_order_btn"):
+            if order_token:
+                st.session_state.order_token = order_token
+                st.session_state.order_placed = True
+                st.rerun()
+
+def display_order_tracking(order_token):
     try:
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr_data = f"{base_url}?table={table_number}"
-        qr.add_data(qr_data)
-        qr.make(fit=True)
+        # Get current order status for live updates
+        current_status = db.get_order_status(order_token)
         
-        qr_img = qr.make_image(fill_color="black", back_color="white")
-        qr_img = qr_img.resize((size, size))
+        # Update session state with current status
+        if current_status and current_status != st.session_state.current_order_status:
+            st.session_state.current_order_status = current_status
+            st.rerun()
         
-        return qr_img
+        # Get full order details
+        order = db.get_order_by_token(order_token)
+        
+        if order:
+            # Status emoji mapping
+            status_emoji = {
+                'pending': '⏳',
+                'preparing': '👨‍🍳',
+                'ready': '✅',
+                'completed': '🎉',
+                'collected': '📦'
+            }
+            
+            current_status = str(order[5]) if order[5] else 'pending'
+            emoji = status_emoji.get(current_status, '📝')
+            
+            # Display real-time status header
+            st.success(f"## {emoji} Order Status: {current_status.title()}")
+            
+            # Order details
+            st.subheader("📋 Order Details")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write(f"**Order ID:** {order[0]}")
+                st.write(f"**Customer:** {order[2]}")
+                st.write(f"**Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
+            with col2:
+                st.write(f"**Total:** R {order[6]}")
+                st.write(f"**Order Date:** {order[7]}")
+                if len(order) > 9 and order[9]:
+                    st.write(f"**Notes:** {order[9]}")
+            
+            # Enhanced Real-time Progress Tracker
+            st.subheader("🔄 Live Order Progress")
+            
+            status_flow = ['pending', 'preparing', 'ready', 'completed']
+            order_type = str(order[4]) if order[4] else 'dine-in'
+            if order_type == 'takeaway':
+                status_flow[2] = 'ready for collection'
+                status_flow[3] = 'collected'
+            
+            current_index = status_flow.index(current_status) if current_status in status_flow else 0
+            
+            # Progress bar with percentage
+            progress = (current_index + 1) / len(status_flow)
+            st.progress(progress)
+            st.write(f"**Progress: {int(progress * 100)}%**")
+            
+            # Visual status steps with timestamps
+            status_history = db.get_order_status_history(order[0])
+            status_times = {}
+            
+            for status_entry in status_history:
+                status_times[status_entry[2]] = status_entry[3]
+            
+            for i, status in enumerate(status_flow):
+                status_time = status_times.get(status, '')
+                time_display = f" - {status_time}" if status_time else ""
+                
+                if i < current_index:
+                    st.success(f"✅ **{status.title()}** {time_display} - Completed")
+                elif i == current_index:
+                    st.info(f"🔄 **{status.title()}** {time_display} - In Progress")
+                    # Show estimated time for current step
+                    if status == 'preparing':
+                        st.write("   *Estimated: 10-15 minutes*")
+                    elif status == 'ready':
+                        st.write("   *Your order is ready!*")
+                else:
+                    st.write(f"⏳ {status.title()} - Pending")
+            
+            # Order items with better formatting
+            st.subheader("🍽️ Your Order Items")
+            if order[8] and isinstance(order[8], str):
+                items = order[8].split(',')
+                for item in items:
+                    st.write(f"• {item.strip()}")
+            else:
+                st.write("No items found in this order")
+            
+            # Special collection button for takeaway
+            order_type = str(order[4]) if order[4] else 'dine-in'
+            if order_type == 'takeaway' and current_status == 'ready for collection':
+                st.success("🎯 **Your order is ready for collection!**")
+                st.balloons()
+                if st.button("🎯 I've Collected My Order", type="primary", key="collect_btn"):
+                    try:
+                        db.update_order_status(order[0], 'collected', 'Customer collected order')
+                        st.success("Thank you! Order marked as collected. Enjoy your meal! 🍽️")
+                        time.sleep(2)
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error updating order: {e}")
+            
+            # Auto-refresh for live updates
+            st.markdown("---")
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.info("🔄 **Live Tracking Active** - Status updates automatically")
+                st.write("Last checked: " + datetime.now().strftime("%H:%M:%S"))
+            with col2:
+                if st.button("🔄 Refresh Now", key="refresh_btn"):
+                    st.rerun()
+            
+            # Auto-refresh every 5 seconds
+            time.sleep(5)
+            st.rerun()
+                
+        else:
+            st.error("❌ Order not found. Please check your Order Token.")
+            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            
     except Exception as e:
-        st.error(f"Error generating QR code: {e}")
-        return None
+        st.error(f"Error tracking order: {e}")
+        st.info("If this problem persists, please contact our staff for assistance.")
+
+# Staff Dashboard Pages - FIXED ORDER MANAGEMENT
+def staff_dashboard():
+    st.title("👨‍💼 Staff Dashboard")
+    
+    # Quick stats - FIXED: Use today's orders only
+    col1, col2, col3, col4 = st.columns(4)
+    
+    try:
+        pending_orders = len(db.get_all_orders('pending'))
+        preparing_orders = len(db.get_all_orders('preparing'))
+        ready_orders = len(db.get_all_orders('ready'))
+        today_orders = db.get_todays_orders_count()  # Fixed: Only today's orders
+    except:
+        pending_orders = preparing_orders = ready_orders = today_orders = 0
+    
+    with col1:
+        st.metric("Pending Orders", pending_orders)
+    with col2:
+        st.metric("Preparing", preparing_orders)
+    with col3:
+        st.metric("Ready", ready_orders)
+    with col4:
+        st.metric("Today's Orders", today_orders)
+    
+    # Recent orders with enhanced display - FIXED STATUS UPDATES
+    st.subheader("📋 Recent Orders - Kitchen View")
+    try:
+        orders = db.get_all_orders()[:15]  # Show more orders
+    except:
+        orders = []
+    
+    if not orders:
+        st.info("No orders found. Orders will appear here when customers place them.")
+        return
+    
+    # Create a container for each order with proper status management
+    for order in orders:
+        order_id = order[0]
+        table_num = order[1] if order[1] else ""
+        customer_name = str(order[2]) if order[2] else "Unknown"
+        order_type = str(order[4]) if order[4] else "dine-in"
+        current_status = str(order[5]) if order[5] else "pending"
+        total_amount = order[6] if order[6] else 0
+        items = order[8] if len(order) > 8 and order[8] else "No items"
+        notes = order[7] if len(order) > 7 and order[7] else ""
+        
+        # Status emoji
+        status_emoji = {
+            'pending': '⏳',
+            'preparing': '👨‍🍳', 
+            'ready': '✅',
+            'completed': '🎉',
+            'collected': '📦'
+        }
+        
+        # Create expander for each order
+        with st.expander(f"{status_emoji.get(current_status, '📝')} Order #{order_id} - {customer_name} - R{total_amount}", expanded=current_status in ['pending', 'preparing']):
+            col1, col2 = st.columns([3, 2])
+            
+            with col1:
+                st.write(f"**Customer:** {customer_name}")
+                st.write(f"**Type:** {order_type.title()}")
+                if order_type == 'dine-in' and table_num:
+                    st.write(f"**Table:** {table_num}")
+                st.write(f"**Items:** {items}")
+                if notes:
+                    st.write(f"**Notes:** {notes}")
+                st.write(f"**Current Status:** **{current_status.title()}**")
+            
+            with col2:
+                # Status update section
+                st.write("### Update Status")
+                
+                # Create a unique key for this order's status selector
+                status_key = f"status_select_{order_id}"
+                
+                # Status options
+                status_options = ['pending', 'preparing', 'ready', 'completed', 'collected']
+                current_index = status_options.index(current_status) if current_status in status_options else 0
+                
+                # Status selector
+                new_status = st.selectbox(
+                    "Select new status:",
+                    status_options,
+                    index=current_index,
+                    key=status_key
+                )
+                
+                # Update button
+                update_key = f"update_btn_{order_id}"
+                if st.button("Update Status", key=update_key, type="primary" if new_status != current_status else "secondary"):
+                    try:
+                        success = db.update_order_status(order_id, new_status, f"Status updated by staff")
+                        if success:
+                            st.success(f"✅ Order #{order_id} status updated to {new_status}!")
+                            # Use a small delay and rerun to show the success message
+                            time.sleep(1.5)
+                            st.rerun()
+                        else:
+                            st.error("Failed to update status")
+                    except Exception as e:
+                        st.error(f"Error updating status: {str(e)}")
+
+def analytics_dashboard():
+    st.markdown("""
+    <style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #2c3e50;
+        text-align: center;
+        margin-bottom: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        padding: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<h1 class="main-header">📊 Restaurant Analytics Dashboard</h1>', unsafe_allow_html=True)
+    
+    # Time period selector
+    days = st.sidebar.selectbox("Select Time Period", [7, 30, 90], index=1)
+    
+    # Get real analytics data
+    analytics_data = db.get_real_analytics(days)
+    
+    if not analytics_data:
+        st.warning("No real data available yet. Analytics will show real data as orders are placed.")
+        return
+    
+    totals = analytics_data['totals']
+    daily_trend = analytics_data['daily_trend']
+    weekly_revenue = analytics_data['weekly_revenue']
+    popular_dishes = analytics_data['popular_dishes']
+    category_distribution = analytics_data['category_distribution']  # NEW
+    
+    # Key Metrics
+    st.subheader("📈 Key Performance Indicators")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_orders = totals[0] if totals else 0
+        st.metric("Total Orders", total_orders)
+    
+    with col2:
+        total_revenue = totals[1] if totals else 0
+        st.metric("Total Revenue", f"R {total_revenue:,.0f}")
+    
+    with col3:
+        avg_order_value = totals[2] if totals else 0
+        st.metric("Average Order", f"R {avg_order_value:.0f}")
+    
+    with col4:
+        if popular_dishes:
+            most_popular = popular_dishes[0][0] if popular_dishes else "No data"
+            st.metric("Most Popular", most_popular)
+        else:
+            st.metric("Most Popular", "No data")
+    
+    # Charts Section
+    st.markdown("---")
+    
+    # Line Chart - Daily Revenue Trend
+    if daily_trend:
+        st.subheader("📈 Daily Revenue Trend")
+        daily_df = pd.DataFrame(daily_trend, columns=['date', 'orders', 'revenue'])
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
+        
+        fig_line = px.line(
+            daily_df, 
+            x='date', 
+            y='revenue',
+            title='Daily Revenue Trend',
+            labels={'revenue': 'Revenue (R)', 'date': 'Date'}
+        )
+        fig_line.update_traces(line=dict(color='#667eea', width=3))
+        st.plotly_chart(fig_line, use_container_width=True)
+    
+    # Bar Chart - Weekly Revenue
+    if weekly_revenue:
+        st.subheader("📊 Weekly Revenue by Day")
+        day_names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+        weekly_df = pd.DataFrame(weekly_revenue, columns=['weekday', 'orders', 'revenue'])
+        weekly_df['day_name'] = weekly_df['weekday'].apply(lambda x: day_names[int(x)])
+        
+        fig_bar = px.bar(
+            weekly_df,
+            x='day_name',
+            y='revenue',
+            title='Revenue by Day of Week',
+            labels={'revenue': 'Revenue (R)', 'day_name': 'Day of Week'},
+            color='revenue',
+            color_continuous_scale='Viridis'
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Pie Chart - Category Distribution (NEW - based on menu categories)
+    if category_distribution:
+        st.subheader("🥧 Menu Category Distribution")
+        category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'orders'])
+        
+        # Category emojis for better visualization
+        category_emojis = {
+            'Main Course': '🍽️',
+            'Appetizer': '🥗', 
+            'Dessert': '🍰',
+            'Beverage': '🥤'
+        }
+        
+        # Add emojis to category names
+        category_df['category_with_emoji'] = category_df['category'].apply(
+            lambda x: f"{category_emojis.get(x, '📦')} {x}"
+        )
+        
+        fig_pie = px.pie(
+            category_df,
+            values='quantity',
+            names='category_with_emoji',
+            title='Items Sold by Category',
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+        
+        # Also show category breakdown as bars
+        st.subheader("📊 Category Performance")
+        fig_category_bar = px.bar(
+            category_df,
+            x='category',
+            y='quantity',
+            color='category',
+            title='Items Sold by Category',
+            labels={'quantity': 'Items Sold', 'category': 'Menu Category'}
+        )
+        st.plotly_chart(fig_category_bar, use_container_width=True)
+    
+    # Popular Dishes Table
+    if popular_dishes:
+        st.subheader("🍽️ Popular Dishes")
+        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'orders'])
+        dishes_df = dishes_df.head(5)  # Top 5 only
+        
+        # Display as a nice table
+        for idx, row in dishes_df.iterrows():
+            col1, col2, col3 = st.columns([3, 1, 1])
+            with col1:
+                st.write(f"**{row['dish']}**")
+            with col2:
+                st.write(f"🍽️ {row['orders']} orders")
+            with col3:
+                st.write(f"📦 {row['quantity']} sold")
+
+# QR Code Management for Admin
+def qr_management():
+    st.title("📱 QR Code Management")
+    
+    st.markdown("""
+    ### Generate QR Code for Customer Ordering
+    
+    Customers can scan this QR code to access the ordering system directly from their phones.
+    Place this QR code at your restaurant entrance, tables, or counter for easy access.
+    """)
+    
+    # Get the current URL (you might need to adjust this based on your deployment)
+    # For local development
+    ordering_url = "https://myfood.streamlit.app/"
+    
+    # For production, you would use your actual deployed URL
+    # ordering_url = "https://your-restaurant-app.streamlit.app"
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("QR Code Preview")
+        # Generate QR code
+        qr_img = generate_qr_code(ordering_url)
+        st.image(f"data:image/png;base64,{qr_img}", width=300)
+        st.caption("Scan this QR code to start ordering")
+    
+    with col2:
+        st.subheader("Download QR Code")
+        st.markdown("""
+        **Instructions:**
+        1. Click the download button below
+        2. Save the QR code image
+        3. Print and display it in your restaurant
+        4. Customers can scan it with their phone camera
+        """)
+        
+        # Download link
+        st.markdown(get_qr_download_link(qr_img), unsafe_allow_html=True)
+        
+        st.info("💡 **Tip:** Place QR codes on tables, at the entrance, and near the counter for maximum visibility.")
+    
+    st.markdown("---")
+    st.subheader("📋 QR Code Best Practices")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.write("**📍 Placement**")
+        st.write("• Restaurant entrance")
+        st.write("• Each table")
+        st.write("• Counter/waiting area")
+        st.write("• Takeaway packaging")
+    
+    with col2:
+        st.write("**📱 Customer Experience**")
+        st.write("• Ensure good lighting")
+        st.write("• Keep QR code clean")
+        st.write("• Test scanning regularly")
+        st.write("• Provide instructions")
+    
+    with col3:
+        st.write("**🖨️ Printing Tips**")
+        st.write("• Use high contrast")
+        st.write("• Minimum size: 2x2 inches")
+        st.write("• Laminated for durability")
+        st.write("• Multiple copies available")
+
+# Main navigation for staff
+def staff_navigation():
+    st.sidebar.title(f"Staff Portal")
+    st.sidebar.write(f"Welcome, {st.session_state.user[1]}!")
+    
+    if st.sidebar.button("Logout"):
+        logout()
+    
+    st.sidebar.markdown("---")
+    
+    page = st.sidebar.radio(
+        "Navigation",
+        ["Dashboard", "Order Management", "Analytics", "QR Codes", "Menu Management"]
+    )
+    
+    if page == "Dashboard":
+        staff_dashboard()
+    elif page == "Order Management":
+        staff_dashboard()
+    elif page == "Analytics":
+        analytics_dashboard()
+    elif page == "QR Codes":
+        qr_management()
+    elif page == "Menu Management":
+        st.title("Menu Management")
+        st.info("Menu management features coming soon...")
+
+# Enhanced Landing Page with improved "How It Works"
+def show_landing_page():
+    st.markdown("""
+    <style>
+    .welcome-header {
+        font-size: 3.5rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-align: center;
+        margin-bottom: 1rem;
+        padding: 1rem;
+    }
+    .welcome-subtitle {
+        font-size: 1.5rem;
+        color: #6c757d;
+        text-align: center;
+        margin-bottom: 3rem;
+        font-weight: 300;
+    }
+    .step-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        margin: 0.5rem;
+        border-left: 4px solid #667eea;
+        height: 100%;
+    }
+    .step-icon {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+    }
+    .step-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #2c3e50;
+    }
+    .step-desc {
+        font-size: 0.9rem;
+        color: #6c757d;
+    }
+    .qr-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem;
+        border-radius: 15px;
+        color: white;
+        text-align: center;
+        margin: 2rem 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Hero Section
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown('<h1 class="welcome-header">Welcome to Sanele Restaurant</h1>', unsafe_allow_html=True)
+        st.markdown('<p class="welcome-subtitle">Experience culinary excellence with every bite</p>', unsafe_allow_html=True)
+        
+        st.markdown("""
+        ### 🎯 Why Choose Us?
+        - 🍽️ **Fresh Ingredients** - Locally sourced, always fresh
+        - 👨‍🍳 **Expert Chefs** - Master chefs with years of experience
+        - ⚡ **Quick Service** - Your order ready in minutes
+        - 📱 **Live Tracking** - Watch your order being prepared in real-time
+        """)
+        
+        if st.button("🍕 Start Your Order Now", type="primary", use_container_width=True):
+            st.session_state.current_step = "order_type"
+            st.rerun()
+    
+    with col2:
+        st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400", 
+                use_container_width=True, caption="Sanele Restaurant")
+    
+    # QR Code Section
+    st.markdown("""
+    <div class="qr-section">
+        <h2>📱 Scan to Order</h2>
+        <p>Use your phone camera to scan the QR code and order directly from your table!</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Display QR code on landing page
+    ordering_url = "https://myfood.streamlit.app/"  # Adjust for production
+    qr_img = generate_qr_code(ordering_url)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        st.image(f"data:image/png;base64,{qr_img}", width=250)
+        st.caption("Scan with your phone camera to order")
+    
+    st.markdown("---")
+    
+    # Improved "How It Works" Section with smaller cards
+    st.subheader("🚀 How It Works")
+    
+    steps = [
+        {
+            "icon": "📱", 
+            "title": "Scan & Order", 
+            "desc": "Scan QR code or visit our site",
+            "image": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?ixlib=rb-4.0.3&w=200"
+        },
+        {
+            "icon": "🛒", 
+            "title": "Confirm", 
+            "desc": "Review & confirm your order",
+            "image": "https://images.unsplash.com/photo-1562428309-f97fc8e256e7?ixlib=rb-4.0.3&w=200"
+        },
+        {
+            "icon": "👨‍🍳", 
+            "title": "We Prepare", 
+            "desc": "Chefs prepare with care",
+            "image": "https://images.unsplash.com/photo-1555244162-803834f70033?ixlib=rb-4.0.3&w=200"
+        },
+        {
+            "icon": "🎯", 
+            "title": "Enjoy", 
+            "desc": "Collect & enjoy your meal",
+            "image": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=200"
+        }
+    ]
+    
+    # Create 4 columns for the steps
+    cols = st.columns(4)
+    
+    for idx, step in enumerate(steps):
+        with cols[idx]:
+            # Display step image
+            st.image(step['image'], use_container_width=True)
+            
+            # Display step card
+            st.markdown(f"""
+            <div class="step-card">
+                <div class="step-icon">{step['icon']}</div>
+                <div class="step-title">{step['title']}</div>
+                <div class="step-desc">{step['desc']}</div>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Restaurant Images Gallery
+    st.markdown("---")
+    st.subheader("🏛️ Sanele Restaurant")
+    
+    gallery_cols = st.columns(3)
+    gallery_images = [
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400",
+        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3&w=400",
+        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.3&w=400"
+    ]
+    
+    for idx, col in enumerate(gallery_cols):
+        with col:
+            st.image(gallery_images[idx], use_container_width=True, 
+                    caption=["Elegant Dining Area", "Modern Kitchen", "Cozy Atmosphere"][idx])
+
+# Main app
+def main():
+    st.set_page_config(
+        page_title="Sanele Restaurant",
+        page_icon="🍽️",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Initialize session state
+    init_session_state()
+    
+    # Main navigation - Customer vs Staff
+    st.sidebar.title("🍽️ Sanele Restaurant")
+    
+    if st.session_state.logged_in:
+        # Staff interface
+        staff_navigation()
+    else:
+        # Customer interface or staff login
+        app_mode = st.sidebar.radio(
+            "I want to:",
+            ["🏠 Home", "Place an Order 🍕", "Track My Order 📱", "Staff Login 👨‍💼"]
+        )
+        
+        if app_mode == "🏠 Home":
+            show_landing_page()
+        elif app_mode == "Place an Order 🍕":
+            customer_ordering()
+        elif app_mode == "Track My Order 📱":
+            track_order()
+        else:  # Staff Login
+            staff_login()
+            if not st.session_state.logged_in:
+                show_landing_page()
 
 if __name__ == "__main__":
     main()
