@@ -162,20 +162,23 @@ class RestaurantDB:
         count = cursor.fetchone()[0]
         
         if count == 0:
-            # Insert South African menu items
+            # Updated South African menu items with lower prices
             south_african_menu = [
-                ('Braai Platter', 'Traditional South African barbecue with boerewors, chops and steak', 285, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
-                ('Bobotie', 'Spiced minced meat baked with an egg-based topping', 165, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
-                ('Bunny Chow', 'Hollowed-out bread filled with curry', 125, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
-                ('Pap and Wors', 'Maize meal porridge with boerewors sausage', 95, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
-                ('Potjiekos', 'Traditional slow-cooked stew in a three-legged pot', 195, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
-                ('Melktert', 'Traditional milk tart with cinnamon', 65, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
-                ('Koeksisters', 'Sweet, syrupy plaited doughnuts', 45, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
-                ('Biltong', 'Dried cured meat - traditional South African snack', 75, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
-                ('Boerewors Roll', 'Traditional sausage in a hot dog roll with chakalaka', 85, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
-                ('Amarula Cream', 'Cream liqueur with marula fruit', 55, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
-                ('Rooibos Tea', 'Traditional South African herbal tea', 35, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
-                ('Chakalaka Salad', 'Spicy vegetable relish served as a side', 45, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400')
+                ('Braai Platter', 'Traditional barbecue with boerewors, chops and steak', 185, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
+                ('Bobotie', 'Spiced minced meat baked with egg topping', 125, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
+                ('Bunny Chow', 'Hollowed bread filled with curry', 95, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
+                ('Pap and Wors', 'Maize meal porridge with boerewors', 75, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
+                ('Potjiekos', 'Slow-cooked stew in three-legged pot', 145, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
+                ('Melktert', 'Traditional milk tart with cinnamon', 45, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
+                ('Koeksisters', 'Sweet syrupy plaited doughnuts', 35, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
+                ('Biltong', 'Dried cured meat traditional snack', 55, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
+                ('Boerewors Roll', 'Sausage in roll with chakalaka', 65, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
+                ('Amarula Cream', 'Cream liqueur with marula fruit', 45, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
+                ('Rooibos Tea', 'Traditional herbal tea', 25, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
+                ('Chakalaka Salad', 'Spicy vegetable relish side', 35, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400'),
+                ('Samp and Beans', 'Traditional maize and bean dish', 85, 'Main Course', 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&w=400'),
+                ('Vetkoek', 'Fried dough bread with mince', 65, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
+                ('Malva Pudding', 'Sweet apricot pudding', 55, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400')
             ]
             
             for item in south_african_menu:
@@ -302,6 +305,15 @@ class RestaurantDB:
         except Exception as e:
             st.error(f"Error getting today's orders: {e}")
             return 0
+    
+    def get_all_orders(self, status=None):
+        """Get orders with optional status filter"""
+        cursor = self.conn.cursor()
+        if status:
+            cursor.execute('SELECT * FROM orders WHERE status = ? ORDER BY order_date DESC', (status,))
+        else:
+            cursor.execute('SELECT * FROM orders ORDER BY order_date DESC')
+        return cursor.fetchall()
     
     def get_active_orders(self):
         """Get orders that are not completed/collected"""
@@ -555,7 +567,7 @@ def customer_ordering():
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Fresh South African cuisine made with love</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Authentic South African cuisine at great prices</p></div>', unsafe_allow_html=True)
     
     # Initialize session state
     init_session_state()
@@ -689,9 +701,9 @@ def show_menu_selection():
     except:
         # Fallback if database error
         menu_items = [
-            (1, 'Braai Platter', 'Traditional South African barbecue', 285, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?w=400'),
-            (2, 'Bobotie', 'Spiced minced meat with egg topping', 165, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?w=400'),
-            (3, 'Bunny Chow', 'Bread filled with curry', 125, 'Main Course', 1, 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400')
+            (1, 'Braai Platter', 'Traditional South African barbecue', 185, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?w=400'),
+            (2, 'Bobotie', 'Spiced minced meat with egg topping', 125, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?w=400'),
+            (3, 'Bunny Chow', 'Bread filled with curry', 95, 'Main Course', 1, 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400')
         ]
     
     # Display menu items
@@ -1115,7 +1127,7 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
     <div class="hero-section">
-        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Sanele Restaurant</h1>
+        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste of South Africa</h1>
         <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Authentic South African Cuisine Experience</p>
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
@@ -1137,8 +1149,7 @@ def show_landing_page():
         st.markdown("""
         ## 🎯 Experience True South African Taste
         
-        We're not just another restaurant - we're an authentic South African experience. Our commitment to traditional recipes, 
-        local ingredients, and customer satisfaction sets us apart from the rest.
+        Authentic South African flavors with traditional recipes and affordable prices.
         
         **🌟 Traditional Recipes** - Passed down through generations  
         **⚡ Lightning Fast** - Average 15-minute preparation  
@@ -1554,7 +1565,7 @@ def staff_navigation():
 # Main app with smart navigation
 def main():
     st.set_page_config(
-        page_title="Sanele Restaurant",
+        page_title="Taste of South Africa",
         page_icon="🍽️",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -1592,7 +1603,7 @@ def main():
             st.sidebar.empty()
             
             # Simple mobile navigation
-            st.markdown('<h2 class="main-header">🍽️ Sanele Restaurant</h2>', unsafe_allow_html=True)
+            st.markdown('<h2 class="main-header">🍽️ Taste of South Africa</h2>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1621,7 +1632,7 @@ def main():
                 
         else:
             # DESKTOP INTERFACE - Full features
-            st.sidebar.title("🍽️ Sanele Restaurant")
+            st.sidebar.title("🍽️ Taste of South Africa")
             st.sidebar.markdown("---")
             
             # Customer navigation
