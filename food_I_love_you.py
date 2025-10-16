@@ -10,7 +10,8 @@ import random
 import qrcode
 from io import BytesIO
 import base64
-import pytz  # Added for timezone support
+import pytz
+import os
 
 # Set South African timezone
 SA_TIMEZONE = pytz.timezone('Africa/Johannesburg')
@@ -22,48 +23,19 @@ def get_sa_time():
 # Database setup with migration support
 class RestaurantDB:
     def __init__(self, db_name="restaurant.db"):
+        self.db_name = db_name
         self.conn = sqlite3.connect(db_name, check_same_thread=False)
         self.create_tables()
     
     def create_tables(self):
         cursor = self.conn.cursor()
         
-        # Check if tables exist and create if they don't
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='orders'")
-        table_exists = cursor.fetchone()
-        
-        if not table_exists:
-            self.create_fresh_tables()
-        else:
-            # Check for missing columns and add them
-            self.update_tables()
-        
-        self.insert_default_data()
-    
-    def update_tables(self):
-        cursor = self.conn.cursor()
-        
-        # Check orders table columns
-        cursor.execute("PRAGMA table_info(orders)")
-        order_columns = [column[1] for column in cursor.fetchall()]
-        
-        # Add missing columns to orders table
-        if 'order_token' not in order_columns:
-            cursor.execute('ALTER TABLE orders ADD COLUMN order_token TEXT UNIQUE')
-        if 'payment_method' not in order_columns:
-            cursor.execute('ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT "cash"')
-        
-        # Check menu_items table columns
-        cursor.execute("PRAGMA table_info(menu_items)")
-        menu_columns = [column[1] for column in cursor.fetchall()]
-        
-        if 'image_url' not in menu_columns:
-            cursor.execute('ALTER TABLE menu_items ADD COLUMN image_url TEXT')
-        
-        self.conn.commit()
-    
-    def create_fresh_tables(self):
-        cursor = self.conn.cursor()
+        # Drop and recreate all tables to ensure fresh start
+        cursor.execute("DROP TABLE IF EXISTS order_status_history")
+        cursor.execute("DROP TABLE IF EXISTS order_items") 
+        cursor.execute("DROP TABLE IF EXISTS orders")
+        cursor.execute("DROP TABLE IF EXISTS menu_items")
+        cursor.execute("DROP TABLE IF EXISTS users")
         
         # Users table (staff only)
         cursor.execute('''
@@ -135,6 +107,7 @@ class RestaurantDB:
         ''')
         
         self.conn.commit()
+        self.insert_default_data()
     
     def insert_default_data(self):
         cursor = self.conn.cursor()
@@ -157,51 +130,46 @@ class RestaurantDB:
         except sqlite3.IntegrityError:
             pass
         
-        # Check if menu items already exist
-        cursor.execute('SELECT COUNT(*) FROM menu_items')
-        count = cursor.fetchone()[0]
+        # Clear existing menu items and insert new South African menu
+        cursor.execute('DELETE FROM menu_items')
         
-        if count == 0:
-            # COMPLETELY NEW SOUTH AFRICAN MENU with affordable prices
-            south_african_menu = [
-                # STARTERS
-                ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
-                ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400'),
-                ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?ixlib=rb-4.0.3&w=400'),
-                
-                # MAIN COURSES
-                ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
-                ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
-                ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
-                ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
-                ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
-                ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&w=400'),
-                ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
-                ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
-                
-                # DESSERTS
-                ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
-                ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
-                ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400'),
-                
-                # BEVERAGES
-                ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
-                ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
-                ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400'),
-                ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400')
-            ]
+        # COMPLETELY NEW SOUTH AFRICAN MENU
+        south_african_menu = [
+            # STARTERS
+            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
+            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400'),
+            ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?ixlib=rb-4.0.3&w=400'),
             
-            for item in south_african_menu:
-                try:
-                    cursor.execute('''
-                        INSERT INTO menu_items (name, description, price, category, image_url)
-                        VALUES (?, ?, ?, ?, ?)
-                    ''', item)
-                except sqlite3.IntegrityError:
-                    pass
+            # MAIN COURSES
+            ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
+            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
+            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
+            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
+            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
+            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&w=400'),
+            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
+            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
+            
+            # DESSERTS
+            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
+            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
+            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400'),
+            
+            # BEVERAGES
+            ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
+            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
+            ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400'),
+            ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400')
+        ]
+        
+        for item in south_african_menu:
+            cursor.execute('''
+                INSERT INTO menu_items (name, description, price, category, image_url)
+                VALUES (?, ?, ?, ?, ?)
+            ''', item)
         
         self.conn.commit()
-    
+
     def get_real_analytics(self, days=30):
         """Get real analytics data from the database"""
         cursor = self.conn.cursor()
@@ -443,8 +411,11 @@ class RestaurantDB:
         result = cursor.fetchone()
         return result[0] if result else None
 
-# Initialize database
+# Initialize database with forced reset
 try:
+    # Delete existing database to force fresh start
+    if os.path.exists("restaurant.db"):
+        os.remove("restaurant.db")
     db = RestaurantDB()
 except Exception as e:
     st.error(f"Database initialization error: {e}")
