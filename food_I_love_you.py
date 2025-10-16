@@ -10,6 +10,14 @@ import random
 import qrcode
 from io import BytesIO
 import base64
+import pytz  # Added for timezone support
+
+# Set South African timezone
+SA_TIMEZONE = pytz.timezone('Africa/Johannesburg')
+
+def get_sa_time():
+    """Get current South African time"""
+    return datetime.now(SA_TIMEZONE)
 
 # Database setup with migration support
 class RestaurantDB:
@@ -154,21 +162,23 @@ class RestaurantDB:
         count = cursor.fetchone()[0]
         
         if count == 0:
-            # Insert sample menu items only if table is empty
-            sample_items = [
-                ('Truffle Pasta', 'Creamy pasta with black truffle and parmesan cheese', 245, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400'),
-                ('Grilled Salmon', 'Atlantic salmon with lemon butter sauce and vegetables', 320, 'Main Course', 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?ixlib=rb-4.0.3&w=400'),
-                ('Caesar Salad', 'Fresh romaine lettuce with caesar dressing and croutons', 95, 'Appetizer', 'https://images.unsplash.com/photo-1546793665-c74683f339c1?ixlib=rb-4.0.3&w=400'),
-                ('Margherita Pizza', 'Classic pizza with tomato sauce and fresh mozzarella', 185, 'Main Course', 'https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?ixlib=rb-4.0.3&w=400'),
-                ('Garlic Bread', 'Toasted bread with garlic butter and herbs', 45, 'Appetizer', 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?ixlib=rb-4.0.3&w=400'),
-                ('Chocolate Lava Cake', 'Warm chocolate cake with vanilla ice cream', 85, 'Dessert', 'https://images.unsplash.com/photo-1624353365286-3f8d62daad51?ixlib=rb-4.0.3&w=400'),
-                ('Mojito', 'Fresh mint and lime cocktail with rum', 65, 'Beverage', 'https://images.unsplash.com/photo-1551538827-9c037cb4f32a?ixlib=rb-4.0.3&w=400'),
-                ('Tiramisu', 'Italian coffee-flavored dessert with mascarpone', 75, 'Dessert', 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?ixlib=rb-4.0.3&w=400'),
-                ('Cappuccino', 'Freshly brewed coffee with steamed milk foam', 35, 'Beverage', 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?ixlib=rb-4.0.3&w=400'),
-                ('Beef Burger', 'Juicy beef patty with fresh vegetables and sauce', 165, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400')
+            # Insert South African menu items
+            south_african_menu = [
+                ('Braai Platter', 'Traditional South African barbecue with boerewors, chops and steak', 285, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
+                ('Bobotie', 'Spiced minced meat baked with an egg-based topping', 165, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
+                ('Bunny Chow', 'Hollowed-out bread filled with curry', 125, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
+                ('Pap and Wors', 'Maize meal porridge with boerewors sausage', 95, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
+                ('Potjiekos', 'Traditional slow-cooked stew in a three-legged pot', 195, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
+                ('Melktert', 'Traditional milk tart with cinnamon', 65, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
+                ('Koeksisters', 'Sweet, syrupy plaited doughnuts', 45, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
+                ('Biltong', 'Dried cured meat - traditional South African snack', 75, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
+                ('Boerewors Roll', 'Traditional sausage in a hot dog roll with chakalaka', 85, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
+                ('Amarula Cream', 'Cream liqueur with marula fruit', 55, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
+                ('Rooibos Tea', 'Traditional South African herbal tea', 35, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
+                ('Chakalaka Salad', 'Spicy vegetable relish served as a side', 45, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400')
             ]
             
-            for item in sample_items:
+            for item in south_african_menu:
                 try:
                     cursor.execute('''
                         INSERT INTO menu_items (name, description, price, category, image_url)
@@ -293,23 +303,22 @@ class RestaurantDB:
             st.error(f"Error getting today's orders: {e}")
             return 0
     
-    def get_all_orders(self, status_filter=None):
+    def get_active_orders(self):
+        """Get orders that are not completed/collected"""
         cursor = self.conn.cursor()
-        query = '''
+        cursor.execute('''
             SELECT o.*, 
                    GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
                    COUNT(oi.id) as item_count
             FROM orders o
             LEFT JOIN order_items oi ON o.id = oi.order_id
-        '''
-        if status_filter:
-            query += f" WHERE o.status = '{status_filter}'"
-        query += " GROUP BY o.id ORDER BY o.order_date DESC"
-        
-        cursor.execute(query)
+            WHERE o.status NOT IN ('completed', 'collected')
+            GROUP BY o.id 
+            ORDER BY o.order_date DESC
+        ''')
         return cursor.fetchall()
     
-    def get_recent_orders(self, limit=20):
+    def get_recent_orders(self, limit=25):
         """Get recent orders with proper ordering"""
         cursor = self.conn.cursor()
         cursor.execute('''
@@ -341,8 +350,8 @@ class RestaurantDB:
         # Generate unique order token
         order_token = f"ORD{random.randint(1000, 9999)}{int(time.time()) % 10000}"
         
-        # Use current timestamp for order date
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Use current South African timestamp for order date
+        current_time = get_sa_time().strftime('%Y-%m-%d %H:%M:%S')
         
         cursor.execute('''
             INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
@@ -546,7 +555,7 @@ def customer_ordering():
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Fresh food made with love, delivered fast</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Fresh South African cuisine made with love</p></div>', unsafe_allow_html=True)
     
     # Initialize session state
     init_session_state()
@@ -668,10 +677,10 @@ def show_menu_selection():
     </style>
     """, unsafe_allow_html=True)
     
-    st.subheader("📋 Explore Our Menu")
+    st.subheader("📋 Explore Our South African Menu")
     
     # Menu categories
-    categories = ['All', 'Appetizer', 'Main Course', 'Dessert', 'Beverage']
+    categories = ['All', 'Starter', 'Main Course', 'Dessert', 'Beverage']
     selected_category = st.selectbox("**Filter by Category**", categories, key="category_filter")
     
     # Get menu items
@@ -680,9 +689,9 @@ def show_menu_selection():
     except:
         # Fallback if database error
         menu_items = [
-            (1, 'Truffle Pasta', 'Creamy pasta with black truffle and parmesan', 245, 'Main Course', 1, 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=400'),
-            (2, 'Grilled Salmon', 'Atlantic salmon with lemon butter sauce', 320, 'Main Course', 1, 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=400'),
-            (3, 'Caesar Salad', 'Fresh romaine with caesar dressing', 95, 'Appetizer', 1, 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=400')
+            (1, 'Braai Platter', 'Traditional South African barbecue', 285, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?w=400'),
+            (2, 'Bobotie', 'Spiced minced meat with egg topping', 165, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?w=400'),
+            (3, 'Bunny Chow', 'Bread filled with curry', 125, 'Main Course', 1, 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400')
         ]
     
     # Display menu items
@@ -811,7 +820,7 @@ def show_order_confirmation():
         
         st.markdown(f"### 💰 **Total Amount: R {total}**")
         st.markdown(f"**📦 Total Items: {item_count}**")
-        st.markdown(f"**🕒 Order Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**")
+        st.markdown(f"**🕒 Order Time: {get_sa_time().strftime('%Y-%m-%d %H:%M:%S')} SAST**")
         st.markdown('</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
@@ -899,6 +908,13 @@ def display_order_tracking(order_token):
         # Get current order status for live updates
         current_status = db.get_order_status(order_token)
         
+        # If order is collected/completed, show completion message and stop tracking
+        if current_status in ['completed', 'collected']:
+            st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
+            st.balloons()
+            st.info("💫 We hope you enjoyed your South African culinary experience!")
+            return
+        
         if not current_status:
             st.error("❌ Order not found. Please check your Order Token.")
             st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
@@ -945,7 +961,7 @@ def display_order_tracking(order_token):
                 st.write(f"**💳 Payment:** {str(order[10]).title() if len(order) > 10 and order[10] else 'Cash'}")
             with col2:
                 st.write(f"**💰 Total:** R {order[6]}")
-                st.write(f"**📅 Order Date:** {order[7]}")
+                st.write(f"**📅 Order Date:** {order[7]} SAST")
                 st.write(f"**📦 Items Ordered:** {order[11] if len(order) > 11 else '0'}")
                 if len(order) > 9 and order[9]:
                     st.write(f"**📝 Notes:** {order[9]}")
@@ -1041,7 +1057,7 @@ def display_order_tracking(order_token):
                 col1, col2 = st.columns([3, 1])
                 with col1:
                     st.info("🔄 **Live Tracking Active** - Status updates automatically")
-                    st.write(f"**Last checked:** {datetime.now().strftime('%H:%M:%S')}")
+                    st.write(f"**Last checked:** {get_sa_time().strftime('%H:%M:%S')} SAST")
                 with col2:
                     if st.button("🔄 Refresh Now", key="refresh_btn"):
                         st.rerun()
@@ -1100,13 +1116,13 @@ def show_landing_page():
     st.markdown("""
     <div class="hero-section">
         <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Sanele Restaurant</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Experience culinary excellence with every bite</p>
+        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Authentic South African Cuisine Experience</p>
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                🍕 Fresh Ingredients
+                🍕 Fresh Local Ingredients
             </div>
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                👨‍🍳 Expert Chefs
+                👨‍🍳 Traditional Recipes
             </div>
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
                 ⚡ Quick Service
@@ -1119,12 +1135,12 @@ def show_landing_page():
     col1, col2 = st.columns([2, 1])
     with col1:
         st.markdown("""
-        ## 🎯 Why Choose Sanele?
+        ## 🎯 Experience True South African Taste
         
-        We're not just another restaurant - we're an experience. Our commitment to quality, 
-        speed, and customer satisfaction sets us apart from the rest.
+        We're not just another restaurant - we're an authentic South African experience. Our commitment to traditional recipes, 
+        local ingredients, and customer satisfaction sets us apart from the rest.
         
-        **🌟 Premium Quality** - Only the finest ingredients  
+        **🌟 Traditional Recipes** - Passed down through generations  
         **⚡ Lightning Fast** - Average 15-minute preparation  
         **📱 Live Tracking** - Watch your order in real-time  
         **💖 Customer First** - Your satisfaction is our priority
@@ -1149,8 +1165,8 @@ def show_landing_page():
         st.markdown("""
         <div class="feature-card">
             <div style="font-size: 3rem;">🍽️</div>
-            <h3>Fresh & Local</h3>
-            <p>We source ingredients locally to ensure the freshest flavors in every dish</p>
+            <h3>Authentic Taste</h3>
+            <p>Traditional South African recipes with authentic flavors and ingredients</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1215,12 +1231,16 @@ def show_landing_page():
 
 # Staff Dashboard with real-time updates
 def staff_dashboard():
-    st.title("👨‍🍳 Kitchen Dashboard")
+    st.title("👨‍🍳 Kitchen Dashboard - Live Orders")
     
-    # Auto-refresh every 3 seconds for real-time updates
-    if time.time() - st.session_state.last_order_check > 3:
+    # Auto-refresh every 2 seconds for real-time updates
+    if time.time() - st.session_state.last_order_check > 2:
         st.session_state.last_order_check = time.time()
         st.rerun()
+    
+    # Show last update time
+    st.write(f"🕒 **Last updated:** {get_sa_time().strftime('%H:%M:%S')} SAST")
+    st.write("🔄 **Auto-refreshing every 2 seconds**")
     
     # Quick stats
     col1, col2, col3, col4 = st.columns(4)
@@ -1242,15 +1262,18 @@ def staff_dashboard():
     with col4:
         st.metric("📊 Today's Orders", today_orders)
     
-    # Recent orders with enhanced display
-    st.subheader("📋 Recent Orders - Live Updates")
+    # Active orders only (not completed/collected)
+    st.subheader("📋 Active Orders - Live Updates")
     try:
-        orders = db.get_recent_orders(25)
+        orders = db.get_active_orders()
     except:
         orders = []
     
     if not orders:
-        st.info("📭 No orders found. Orders will appear here when customers place them.")
+        st.info("📭 No active orders. New orders will appear here automatically.")
+        # Show refresh button
+        if st.button("🔄 Refresh Now"):
+            st.rerun()
         return
     
     # Create a container for each order with proper status management
@@ -1288,7 +1311,7 @@ def staff_dashboard():
                 st.write(f"**💳 Payment:** {payment_method.title()}")
                 if order_type == 'dine-in' and table_num:
                     st.write(f"**🪑 Table:** {table_num}")
-                st.write(f"**🕒 Time:** {order_time}")
+                st.write(f"**🕒 Time:** {order_time} SAST")
                 st.write(f"**📦 Items ({item_count}):** {items}")
                 if notes:
                     st.write(f"**📝 Notes:** {notes}")
