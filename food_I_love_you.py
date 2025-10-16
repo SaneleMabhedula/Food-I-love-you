@@ -42,6 +42,8 @@ class RestaurantDB:
         # Add missing columns to orders table
         if 'order_token' not in order_columns:
             cursor.execute('ALTER TABLE orders ADD COLUMN order_token TEXT UNIQUE')
+        if 'payment_method' not in order_columns:
+            cursor.execute('ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT "cash"')
         
         # Check menu_items table columns
         cursor.execute("PRAGMA table_info(menu_items)")
@@ -80,7 +82,7 @@ class RestaurantDB:
             )
         ''')
         
-        # Orders table - simplified without customer_phone
+        # Orders table
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -92,7 +94,8 @@ class RestaurantDB:
                 order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 notes TEXT,
                 estimated_wait_time INTEGER DEFAULT 15,
-                order_token TEXT UNIQUE
+                order_token TEXT UNIQUE,
+                payment_method TEXT DEFAULT 'cash'
             )
         ''')
         
@@ -205,24 +208,25 @@ class RestaurantDB:
             ''', (days,))
             daily_data = cursor.fetchall()
             
-            # Weekly revenue by day of week
+            # Revenue by hour
             cursor.execute('''
                 SELECT 
-                    strftime('%w', order_date) as weekday,
+                    strftime('%H', order_date) as hour,
                     COUNT(*) as order_count,
-                    COALESCE(SUM(total_amount), 0) as daily_revenue
+                    COALESCE(SUM(total_amount), 0) as hourly_revenue
                 FROM orders 
                 WHERE order_date >= date('now', '-' || ? || ' days')
-                GROUP BY weekday
-                ORDER BY weekday
+                GROUP BY hour
+                ORDER BY hour
             ''', (days,))
-            weekly_data = cursor.fetchall()
+            hourly_data = cursor.fetchall()
             
             # Popular dishes
             cursor.execute('''
                 SELECT 
                     oi.menu_item_name,
                     SUM(oi.quantity) as total_quantity,
+                    SUM(oi.quantity * oi.price) as total_revenue,
                     COUNT(DISTINCT oi.order_id) as order_count
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.id
@@ -233,11 +237,12 @@ class RestaurantDB:
             ''', (days,))
             popular_dishes = cursor.fetchall()
             
-            # Category distribution (NEW - based on menu categories)
+            # Category distribution
             cursor.execute('''
                 SELECT 
                     mi.category,
                     SUM(oi.quantity) as total_quantity,
+                    SUM(oi.quantity * oi.price) as total_revenue,
                     COUNT(DISTINCT oi.order_id) as order_count
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.id
@@ -248,12 +253,25 @@ class RestaurantDB:
             ''', (days,))
             category_distribution = cursor.fetchall()
             
+            # Payment method distribution
+            cursor.execute('''
+                SELECT 
+                    payment_method,
+                    COUNT(*) as order_count,
+                    COALESCE(SUM(total_amount), 0) as total_revenue
+                FROM orders 
+                WHERE order_date >= date('now', '-' || ? || ' days')
+                GROUP BY payment_method
+            ''', (days,))
+            payment_distribution = cursor.fetchall()
+            
             return {
                 'totals': totals,
                 'daily_trend': daily_data,
-                'weekly_revenue': weekly_data,
+                'hourly_data': hourly_data,
                 'popular_dishes': popular_dishes,
-                'category_distribution': category_distribution  # NEW
+                'category_distribution': category_distribution,
+                'payment_distribution': payment_distribution
             }
             
         except Exception as e:
@@ -316,7 +334,7 @@ class RestaurantDB:
         cursor.execute(query)
         return cursor.fetchall()
     
-    def add_order(self, customer_name, order_type, items, table_number=None, notes=""):
+    def add_order(self, customer_name, order_type, items, table_number=None, notes="", payment_method="cash"):
         cursor = self.conn.cursor()
         total_amount = sum(item['price'] * item['quantity'] for item in items)
         
@@ -327,9 +345,9 @@ class RestaurantDB:
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
         cursor.execute('''
-            INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (customer_name, order_type, table_number, total_amount, notes, order_token, current_time))
+            INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (customer_name, order_type, table_number, total_amount, notes, order_token, current_time, payment_method))
         
         order_id = cursor.lastrowid
         
@@ -367,6 +385,7 @@ class RestaurantDB:
         cursor.execute('''
             SELECT o.*, 
                    GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
+                   COUNT(oi.id) as item_count,
                    o.notes as order_notes
             FROM orders o
             LEFT JOIN order_items oi ON o.id = oi.order_id
@@ -425,27 +444,26 @@ def generate_qr_code(url, size=300):
 
 def get_qr_download_link(img_str, filename="sanele_ordering_qr.png"):
     """Generate download link for QR code"""
-    href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Download QR Code</a>'
+    href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📱 Download QR Code</a>'
     return href
 
 # Smart Device Detection
 def is_mobile_device():
     """Smart detection for mobile devices"""
     try:
-        # Simple approach - you can enhance this based on your needs
         return False  # Default to desktop for now
     except:
         return False
 
 # Authentication for staff
 def staff_login():
-    st.sidebar.title("Staff Portal")
+    st.sidebar.title("🔐 Staff Portal")
     st.sidebar.markdown("---")
     
-    username = st.sidebar.text_input("Username")
-    password = st.sidebar.text_input("Password", type="password")
+    username = st.sidebar.text_input("👤 Username")
+    password = st.sidebar.text_input("🔒 Password", type="password")
     
-    if st.sidebar.button("Login", type="primary", use_container_width=True):
+    if st.sidebar.button("🚀 Login", type="primary", use_container_width=True):
         if username and password:
             cursor = db.conn.cursor()
             hashed_password = hashlib.sha256(password.encode()).hexdigest()
@@ -456,13 +474,13 @@ def staff_login():
                 st.session_state.user = user
                 st.session_state.logged_in = True
                 st.session_state.role = user[3]
-                st.sidebar.success(f"Welcome back, {user[1]}!")
+                st.sidebar.success(f"🎉 Welcome back, {user[1]}!")
                 time.sleep(1)
                 st.rerun()
             else:
-                st.sidebar.error("Invalid credentials")
+                st.sidebar.error("❌ Invalid credentials")
         else:
-            st.sidebar.warning("Please enter both username and password")
+            st.sidebar.warning("⚠️ Please enter both username and password")
 
 def logout():
     st.session_state.logged_in = False
@@ -486,6 +504,8 @@ def init_session_state():
         st.session_state.table_number = 1
     if 'order_notes' not in st.session_state:
         st.session_state.order_notes = ""
+    if 'payment_method' not in st.session_state:
+        st.session_state.payment_method = "cash"
     if 'cart' not in st.session_state:
         st.session_state.cart = []
     if 'order_placed' not in st.session_state:
@@ -526,7 +546,7 @@ def customer_ordering():
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="order-header"><h1>Place Your Order</h1><p>Fresh food made with love, delivered fast</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Fresh food made with love, delivered fast</p></div>', unsafe_allow_html=True)
     
     # Initialize session state
     init_session_state()
@@ -552,13 +572,13 @@ def customer_ordering():
         track_order()
 
 def show_order_type_selection():
-    st.subheader("Choose Your Experience")
+    st.subheader("🎯 Choose Your Experience")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=300", use_container_width=True)
-        if st.button("Dine In", use_container_width=True, key="dine_in_btn"):
+        if st.button("🏠 **Dine In**", use_container_width=True, key="dine_in_btn"):
             st.session_state.order_type = "dine-in"
             st.session_state.current_step = "customer_info"
             st.rerun()
@@ -566,7 +586,7 @@ def show_order_type_selection():
     
     with col2:
         st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=300", use_container_width=True)
-        if st.button("Takeaway", use_container_width=True, key="takeaway_btn"):
+        if st.button("🥡 **Takeaway**", use_container_width=True, key="takeaway_btn"):
             st.session_state.order_type = "takeaway"
             st.session_state.current_step = "customer_info"
             st.rerun()
@@ -574,18 +594,18 @@ def show_order_type_selection():
     
     with col3:
         st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&w=300", use_container_width=True)
-        if st.button("Delivery", use_container_width=True, key="delivery_btn"):
+        if st.button("🚚 **Delivery**", use_container_width=True, key="delivery_btn"):
             st.session_state.order_type = "delivery"
             st.session_state.current_step = "customer_info"
             st.rerun()
         st.caption("We bring it to your door")
 
 def show_customer_info():
-    st.subheader("Customer Information")
+    st.subheader("👤 Customer Information")
     
     with st.form("customer_info_form"):
         customer_name = st.text_input(
-            "Your Name", 
+            "**Your Name**", 
             value=st.session_state.customer_name,
             placeholder="Enter your full name",
             key="customer_name_input"
@@ -593,7 +613,7 @@ def show_customer_info():
         
         if st.session_state.order_type == "dine-in":
             table_number = st.number_input(
-                "Table Number", 
+                "**Table Number**", 
                 min_value=1, 
                 max_value=50, 
                 value=st.session_state.table_number,
@@ -603,18 +623,26 @@ def show_customer_info():
             table_number = None
         
         order_notes = st.text_area(
-            "Special Instructions", 
+            "**Special Instructions**", 
             value=st.session_state.order_notes,
             placeholder="Any allergies, dietary restrictions, or special requests...",
             key="order_notes_input",
             height=100
         )
         
-        submitted = st.form_submit_button("Continue to Menu", type="primary")
+        # Payment method selection
+        payment_method = st.radio(
+            "**Payment Method**",
+            ["💵 Cash", "💳 Card"],
+            key="payment_method_input"
+        )
+        st.session_state.payment_method = "cash" if payment_method == "💵 Cash" else "card"
+        
+        submitted = st.form_submit_button("🚀 Continue to Menu", type="primary")
         
         if submitted:
             if not customer_name:
-                st.error("Please provide your name")
+                st.error("👋 Please provide your name")
             else:
                 # Store in session state
                 st.session_state.customer_name = customer_name
@@ -640,11 +668,11 @@ def show_menu_selection():
     </style>
     """, unsafe_allow_html=True)
     
-    st.subheader("Our Menu")
+    st.subheader("📋 Explore Our Menu")
     
     # Menu categories
     categories = ['All', 'Appetizer', 'Main Course', 'Dessert', 'Beverage']
-    selected_category = st.selectbox("Filter by Category", categories, key="category_filter")
+    selected_category = st.selectbox("**Filter by Category**", categories, key="category_filter")
     
     # Get menu items
     try:
@@ -671,9 +699,9 @@ def show_menu_selection():
                     st.image("https://via.placeholder.com/300x200", use_container_width=True)
             
             with col2:
-                st.subheader(item[1])
+                st.subheader(f"🍽️ {item[1]}")
                 st.write(f"_{item[2]}_")
-                st.write(f"**R {item[3]}**")
+                st.write(f"**💰 R {item[3]}**")
                 
                 # Quantity and add to cart
                 col_a, col_b, col_c = st.columns([1, 2, 1])
@@ -683,7 +711,7 @@ def show_menu_selection():
                     instructions = st.text_input("Special requests", key=f"inst_{item[0]}", placeholder="e.g., no onions, extra sauce")
                 with col_c:
                     if quantity > 0:
-                        if st.button("Add to Cart", key=f"add_{item[0]}"):
+                        if st.button("**+ Add**", key=f"add_{item[0]}"):
                             cart_item = {
                                 'id': item[0],
                                 'name': item[1],
@@ -692,7 +720,7 @@ def show_menu_selection():
                                 'instructions': instructions
                             }
                             st.session_state.cart.append(cart_item)
-                            st.success(f"Added {quantity} x {item[1]} to cart!")
+                            st.success(f"✅ Added {quantity} x {item[1]} to cart!")
                             st.rerun()
     
     # Display cart and navigation
@@ -701,7 +729,7 @@ def show_menu_selection():
 def show_cart_and_navigation():
     if st.session_state.cart:
         st.markdown("---")
-        st.subheader("Your Order")
+        st.subheader("🛒 Your Order Summary")
         
         total = 0
         for i, item in enumerate(st.session_state.cart):
@@ -709,32 +737,32 @@ def show_cart_and_navigation():
             with col1:
                 st.write(f"**{item['name']}**")
                 if item['instructions']:
-                    st.caption(f"_{item['instructions']}_")
+                    st.caption(f"📝 _{item['instructions']}_")
             with col2:
                 st.write(f"R {item['price']}")
             with col3:
                 st.write(f"x{item['quantity']}")
             with col4:
-                if st.button("Remove", key=f"remove_{i}"):
+                if st.button("❌", key=f"remove_{i}"):
                     st.session_state.cart.pop(i)
                     st.rerun()
             
             total += item['price'] * item['quantity']
         
-        st.markdown(f"### Total: R {total}")
+        st.markdown(f"### 💰 Total: R {total}")
         
         col1, col2 = st.columns(2)
         with col1:
-            if st.button("Back to Info", use_container_width=True):
+            if st.button("← Back to Info", use_container_width=True):
                 st.session_state.current_step = "customer_info"
                 st.rerun()
         
         with col2:
-            if st.button("Place Order", type="primary", use_container_width=True):
+            if st.button("📦 **Place Order**", type="primary", use_container_width=True):
                 st.session_state.current_step = "confirmation"
                 st.rerun()
     else:
-        if st.button("Back to Customer Info"):
+        if st.button("← Back to Customer Info"):
             st.session_state.current_step = "customer_info"
             st.rerun()
 
@@ -750,46 +778,51 @@ def show_order_confirmation():
     </style>
     """, unsafe_allow_html=True)
     
-    st.title("Order Confirmation")
+    st.title("✅ Order Confirmation")
     
     with st.container():
         st.markdown('<div class="confirmation-box">', unsafe_allow_html=True)
         
         # Display order summary
-        st.subheader("Order Summary")
+        st.subheader("📋 Order Summary")
         col1, col2 = st.columns(2)
         
         with col1:
-            st.write(f"**Customer:** {st.session_state.customer_name}")
-            st.write(f"**Order Type:** {st.session_state.order_type.title()}")
+            st.write(f"**👤 Customer:** {st.session_state.customer_name}")
+            st.write(f"**🎯 Order Type:** {st.session_state.order_type.title()}")
+            st.write(f"**💳 Payment:** {st.session_state.payment_method.title()}")
         
         with col2:
             if st.session_state.order_type == "dine-in":
-                st.write(f"**Table:** {st.session_state.table_number}")
+                st.write(f"**🪑 Table:** {st.session_state.table_number}")
             if st.session_state.order_notes:
-                st.write(f"**Notes:** {st.session_state.order_notes}")
+                st.write(f"**📝 Notes:** {st.session_state.order_notes}")
         
-        st.subheader("Order Items")
+        st.subheader("🍽️ Order Items")
         total = 0
+        item_count = 0
         for item in st.session_state.cart:
             item_total = item['price'] * item['quantity']
             total += item_total
+            item_count += item['quantity']
             st.write(f"• **{item['quantity']}x {item['name']}** - R {item_total}")
             if item['instructions']:
-                st.caption(f"  _{item['instructions']}_")
+                st.caption(f"  _📝 {item['instructions']}_")
         
-        st.markdown(f"### **Total Amount: R {total}**")
+        st.markdown(f"### 💰 **Total Amount: R {total}**")
+        st.markdown(f"**📦 Total Items: {item_count}**")
+        st.markdown(f"**🕒 Order Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}**")
         st.markdown('</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("Back to Menu", use_container_width=True):
+        if st.button("← Back to Menu", use_container_width=True):
             st.session_state.current_step = "menu"
             st.rerun()
     
     with col2:
-        if st.button("Confirm Order", type="primary", use_container_width=True):
+        if st.button("🚀 **Confirm & Place Order**", type="primary", use_container_width=True):
             try:
                 # Save order to database
                 order_id, order_token = db.add_order(
@@ -797,7 +830,8 @@ def show_order_confirmation():
                     st.session_state.order_type,
                     st.session_state.cart,
                     st.session_state.table_number,
-                    st.session_state.order_notes
+                    st.session_state.order_notes,
+                    st.session_state.payment_method
                 )
                 
                 st.session_state.order_placed = True
@@ -809,11 +843,12 @@ def show_order_confirmation():
                 st.session_state.cart = []
                 
                 st.session_state.current_step = "tracking"
+                st.balloons()
                 st.rerun()
                 
             except Exception as e:
-                st.error(f"Error placing order: {e}")
-                st.error("Please try again or contact staff for assistance.")
+                st.error(f"❌ Error placing order: {e}")
+                st.error("Please try again or contact our friendly staff for assistance.")
 
 def track_order():
     st.markdown("""
@@ -829,7 +864,7 @@ def track_order():
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="tracking-header"><h1>Track Your Order</h1><p>Watch your meal being prepared in real-time</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tracking-header"><h1>📱 Track Your Order</h1><p>Watch your meal being prepared in real-time</p></div>', unsafe_allow_html=True)
     
     # Initialize session state for tracking
     if 'tracking_order_token' not in st.session_state:
@@ -848,16 +883,16 @@ def track_order():
         display_order_tracking(st.session_state.tracking_order_token)
     else:
         # Allow manual order token entry
-        st.info("Enter your Order Token to track your order status")
+        st.info("🔍 **Enter your Order Token to track your order status**")
         order_token = st.text_input("Order Token", placeholder="ORD123456789", key="track_order_input")
         
-        if st.button("Track Order", type="primary", key="track_order_btn"):
+        if st.button("🔍 Track Order", type="primary", key="track_order_btn"):
             if order_token:
                 st.session_state.tracking_order_token = order_token
                 st.session_state.tracking_order_placed = True
                 st.rerun()
             else:
-                st.error("Please enter your order token")
+                st.error("❌ Please enter your order token")
 
 def display_order_tracking(order_token):
     try:
@@ -865,8 +900,8 @@ def display_order_tracking(order_token):
         current_status = db.get_order_status(order_token)
         
         if not current_status:
-            st.error("Order not found. Please check your Order Token.")
-            st.info("Make sure you entered the correct Order Token from your order confirmation.")
+            st.error("❌ Order not found. Please check your Order Token.")
+            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
             return
         
         # Update session state with current status for comparison
@@ -894,26 +929,29 @@ def display_order_tracking(order_token):
             # Display real-time status header
             st.markdown(f"""
             <div style="background-color: {current_status_info['color']}; color: white; padding: 2rem; border-radius: 15px; text-align: center; margin-bottom: 2rem;">
+                <h1 style="margin: 0; font-size: 2.5rem;">{current_status_info['emoji']}</h1>
                 <h2 style="margin: 10px 0; color: white;">{current_status_info['name']}</h2>
                 <p style="margin: 0; font-size: 1.2rem; opacity: 0.9;">{current_status_info['description']}</p>
             </div>
             """, unsafe_allow_html=True)
             
             # Order details
-            st.subheader("Order Details")
+            st.subheader("📋 Order Details")
             col1, col2 = st.columns(2)
             with col1:
-                st.write(f"**Order ID:** {order[0]}")
-                st.write(f"**Customer:** {order[2]}")
-                st.write(f"**Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
+                st.write(f"**📄 Order ID:** {order[0]}")
+                st.write(f"**👤 Customer:** {order[2]}")
+                st.write(f"**🎯 Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
+                st.write(f"**💳 Payment:** {str(order[10]).title() if len(order) > 10 and order[10] else 'Cash'}")
             with col2:
-                st.write(f"**Total:** R {order[6]}")
-                st.write(f"**Order Date:** {order[7]}")
+                st.write(f"**💰 Total:** R {order[6]}")
+                st.write(f"**📅 Order Date:** {order[7]}")
+                st.write(f"**📦 Items Ordered:** {order[11] if len(order) > 11 else '0'}")
                 if len(order) > 9 and order[9]:
-                    st.write(f"**Notes:** {order[9]}")
+                    st.write(f"**📝 Notes:** {order[9]}")
             
             # Enhanced Real-time Progress Tracker
-            st.subheader("Order Progress")
+            st.subheader("🔄 Order Progress")
             
             # Define status flow based on order type
             if str(order[4]) == 'takeaway':
@@ -928,7 +966,7 @@ def display_order_tracking(order_token):
             # Progress bar with percentage
             progress = current_index / (len(status_flow) - 1) if len(status_flow) > 1 else 0
             st.progress(progress)
-            st.write(f"**Progress: {int(progress * 100)}%**")
+            st.write(f"**📊 Progress: {int(progress * 100)}%**")
             
             # Visual status steps
             cols = st.columns(len(status_flow))
@@ -941,6 +979,7 @@ def display_order_tracking(order_token):
                         # Completed step
                         st.markdown(f"""
                         <div style="text-align: center; padding: 15px; background: #4CAF50; color: white; border-radius: 10px; margin: 5px;">
+                            <div style="font-size: 2rem;">✅</div>
                             <strong>{status_name}</strong>
                             <div style="font-size: 0.8rem; opacity: 0.9;">Completed</div>
                         </div>
@@ -949,6 +988,7 @@ def display_order_tracking(order_token):
                         # Current step
                         st.markdown(f"""
                         <div style="text-align: center; padding: 15px; background: {status_info['color']}; color: white; border-radius: 10px; margin: 5px; border: 3px solid #FFD700;">
+                            <div style="font-size: 2rem;">{status_info['emoji']}</div>
                             <strong>{status_name}</strong>
                             <div style="font-size: 0.8rem; opacity: 0.9;">In Progress</div>
                         </div>
@@ -956,20 +996,22 @@ def display_order_tracking(order_token):
                         
                         # Show estimated time for current step
                         if status == 'preparing':
-                            st.info("Estimated time: 10-15 minutes")
+                            st.info("⏱️ **Estimated time: 10-15 minutes**")
                         elif status == 'ready':
-                            st.success("Your order is ready!")
+                            st.success("🎉 **Your order is ready!**")
+                            st.balloons()
                     else:
                         # Future step
                         st.markdown(f"""
                         <div style="text-align: center; padding: 15px; background: #f0f0f0; color: #666; border-radius: 10px; margin: 5px;">
+                            <div style="font-size: 2rem;">⏳</div>
                             <strong>{status_name}</strong>
                             <div style="font-size: 0.8rem; opacity: 0.9;">Upcoming</div>
                         </div>
                         """, unsafe_allow_html=True)
             
-            # Order items
-            st.subheader("Your Order Items")
+            # Order items with detailed information
+            st.subheader("🍽️ Your Order Items")
             if order[8] and isinstance(order[8], str):
                 items = order[8].split(',')
                 for item in items:
@@ -980,17 +1022,17 @@ def display_order_tracking(order_token):
             # Special collection button for takeaway
             order_type = str(order[4]) if order[4] else 'dine-in'
             if order_type == 'takeaway' and current_status == 'ready':
-                st.success("Your order is ready for collection!")
-                st.info("Please come to the counter to collect your order")
+                st.success("🎯 **Your order is ready for collection!**")
+                st.info("📍 Please come to the counter to collect your order")
                 
-                if st.button("I've Collected My Order", type="primary", key="collect_btn"):
+                if st.button("📦 **I've Collected My Order**", type="primary", key="collect_btn"):
                     try:
                         db.update_order_status(order[0], 'collected', 'Customer collected order')
-                        st.success("Thank you! Order marked as collected. Enjoy your meal!")
+                        st.success("🎉 Thank you! Order marked as collected. Enjoy your meal! 🍽️")
                         time.sleep(2)
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Error updating order: {e}")
+                        st.error(f"❌ Error updating order: {e}")
             
             # Auto-refresh for live updates
             st.markdown("---")
@@ -998,25 +1040,25 @@ def display_order_tracking(order_token):
             with refresh_container:
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.info("Live Tracking Active - Status updates automatically")
-                    st.write(f"Last checked: {datetime.now().strftime('%H:%M:%S')}")
+                    st.info("🔄 **Live Tracking Active** - Status updates automatically")
+                    st.write(f"**Last checked:** {datetime.now().strftime('%H:%M:%S')}")
                 with col2:
-                    if st.button("Refresh Now", key="refresh_btn"):
+                    if st.button("🔄 Refresh Now", key="refresh_btn"):
                         st.rerun()
             
-            # Auto-refresh every 3 seconds for better real-time updates
+            # Auto-refresh every 3 seconds for real-time updates
             time.sleep(3)
             st.rerun()
                 
         else:
-            st.error("Order not found. Please check your Order Token.")
-            st.info("Make sure you entered the correct Order Token from your order confirmation.")
+            st.error("❌ Order not found. Please check your Order Token.")
+            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
             
     except Exception as e:
-        st.error(f"Error tracking order: {e}")
-        st.info("If this problem persists, please contact our staff for assistance.")
+        st.error(f"❌ Error tracking order: {e}")
+        st.info("🤝 If this problem persists, please contact our staff for assistance.")
 
-# Enhanced Landing Page
+# Enhanced Landing Page with proper dark/light mode support
 def show_landing_page():
     st.markdown("""
     <style>
@@ -1029,7 +1071,7 @@ def show_landing_page():
         margin-bottom: 3rem;
     }
     .feature-card {
-        background: white;
+        background: var(--background-color);
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -1037,17 +1079,19 @@ def show_landing_page():
         margin: 1rem;
         border-left: 5px solid #667eea;
         transition: transform 0.3s ease;
+        color: var(--text-color);
     }
     .feature-card:hover {
         transform: translateY(-5px);
     }
     .step-card {
-        background: white;
+        background: var(--background-color);
         padding: 1.5rem;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         text-align: center;
         margin: 0.5rem;
+        color: var(--text-color);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1055,8 +1099,19 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
     <div class="hero-section">
-        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">Sanele Restaurant</h1>
+        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Sanele Restaurant</h1>
         <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Experience culinary excellence with every bite</p>
+        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                🍕 Fresh Ingredients
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                👨‍🍳 Expert Chefs
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                ⚡ Quick Service
+            </div>
+        </div>
     </div>
     """, unsafe_allow_html=True)
     
@@ -1064,30 +1119,36 @@ def show_landing_page():
     col1, col2 = st.columns([2, 1])
     with col1:
         st.markdown("""
-        ## Why Choose Sanele?
+        ## 🎯 Why Choose Sanele?
         
         We're not just another restaurant - we're an experience. Our commitment to quality, 
         speed, and customer satisfaction sets us apart from the rest.
+        
+        **🌟 Premium Quality** - Only the finest ingredients  
+        **⚡ Lightning Fast** - Average 15-minute preparation  
+        **📱 Live Tracking** - Watch your order in real-time  
+        **💖 Customer First** - Your satisfaction is our priority
         """)
         
-        if st.button("Start Your Order Now", type="primary", use_container_width=True):
+        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True):
             st.session_state.current_step = "order_type"
             st.session_state.current_page = "order"
             st.rerun()
     
     with col2:
         st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400", 
-                use_container_width=True, caption="Our Restaurant")
+                use_container_width=True, caption="Our Beautiful Restaurant")
     
     # Features Grid
     st.markdown("---")
-    st.subheader("What Makes Us Special")
+    st.subheader("🌟 What Makes Us Special")
     
     features = st.columns(3)
     
     with features[0]:
         st.markdown("""
         <div class="feature-card">
+            <div style="font-size: 3rem;">🍽️</div>
             <h3>Fresh & Local</h3>
             <p>We source ingredients locally to ensure the freshest flavors in every dish</p>
         </div>
@@ -1096,7 +1157,8 @@ def show_landing_page():
     with features[1]:
         st.markdown("""
         <div class="feature-card">
-            <h3>Fast Service</h3>
+            <div style="font-size: 3rem;">⚡</div>
+            <h3>Lightning Fast</h3>
             <p>Average preparation time of just 15 minutes. Your hunger won't wait!</p>
         </div>
         """, unsafe_allow_html=True)
@@ -1104,6 +1166,7 @@ def show_landing_page():
     with features[2]:
         st.markdown("""
         <div class="feature-card">
+            <div style="font-size: 3rem;">📱</div>
             <h3>Live Tracking</h3>
             <p>Watch your order being prepared in real-time. No more guessing!</p>
         </div>
@@ -1111,15 +1174,15 @@ def show_landing_page():
     
     # How It Works
     st.markdown("---")
-    st.subheader("How It Works")
+    st.subheader("🚀 How It Works")
     
     steps = st.columns(4)
     
     step_data = [
-        {"title": "Browse Menu", "desc": "Use your phone to browse our menu"},
-        {"title": "Add Items", "desc": "Select your favorite dishes"},
-        {"title": "We Prepare", "desc": "Our chefs cook with passion"},
-        {"title": "Enjoy", "desc": "Collect and savor every bite"}
+        {"icon": "📱", "title": "Scan & Order", "desc": "Use your phone to browse our menu"},
+        {"icon": "🛒", "title": "Add Items", "desc": "Select your favorite dishes"},
+        {"icon": "👨‍🍳", "title": "We Prepare", "desc": "Our chefs cook with passion"},
+        {"icon": "🎯", "title": "Enjoy", "desc": "Collect and savor every bite"}
     ]
     
     for idx, step in enumerate(steps):
@@ -1127,6 +1190,7 @@ def show_landing_page():
             data = step_data[idx]
             st.markdown(f"""
             <div class="step-card">
+                <div style="font-size: 2.5rem; margin-bottom: 1rem;">{data['icon']}</div>
                 <h4>{data['title']}</h4>
                 <p style="font-size: 0.9rem; color: #666;">{data['desc']}</p>
             </div>
@@ -1134,7 +1198,7 @@ def show_landing_page():
     
     # Restaurant Gallery
     st.markdown("---")
-    st.subheader("Our Restaurant")
+    st.subheader("🏛️ Our Restaurant")
     
     gallery = st.columns(3)
     gallery_images = [
@@ -1151,10 +1215,10 @@ def show_landing_page():
 
 # Staff Dashboard with real-time updates
 def staff_dashboard():
-    st.title("Kitchen Dashboard")
+    st.title("👨‍🍳 Kitchen Dashboard")
     
-    # Auto-refresh every 5 seconds
-    if time.time() - st.session_state.last_order_check > 5:
+    # Auto-refresh every 3 seconds for real-time updates
+    if time.time() - st.session_state.last_order_check > 3:
         st.session_state.last_order_check = time.time()
         st.rerun()
     
@@ -1170,23 +1234,23 @@ def staff_dashboard():
         pending_orders = preparing_orders = ready_orders = today_orders = 0
     
     with col1:
-        st.metric("Pending Orders", pending_orders)
+        st.metric("⏳ Pending Orders", pending_orders)
     with col2:
-        st.metric("Preparing", preparing_orders)
+        st.metric("👨‍🍳 Preparing", preparing_orders)
     with col3:
-        st.metric("Ready", ready_orders)
+        st.metric("✅ Ready", ready_orders)
     with col4:
-        st.metric("Today's Orders", today_orders)
+        st.metric("📊 Today's Orders", today_orders)
     
     # Recent orders with enhanced display
-    st.subheader("Recent Orders")
+    st.subheader("📋 Recent Orders - Live Updates")
     try:
-        orders = db.get_recent_orders(20)
+        orders = db.get_recent_orders(25)
     except:
         orders = []
     
     if not orders:
-        st.info("No orders found. Orders will appear here when customers place them.")
+        st.info("📭 No orders found. Orders will appear here when customers place them.")
         return
     
     # Create a container for each order with proper status management
@@ -1199,37 +1263,41 @@ def staff_dashboard():
         total_amount = order[6] if order[6] else 0
         order_time = order[7] if order[7] else "Unknown"
         items = order[8] if len(order) > 8 and order[8] else "No items"
+        item_count = order[11] if len(order) > 11 else 0
+        payment_method = order[10] if len(order) > 10 and order[10] else "cash"
         notes = order[7] if len(order) > 7 and order[7] else ""
         
-        # Status colors
-        status_colors = {
-            'pending': '#FFA500',
-            'preparing': '#1E90FF', 
-            'ready': '#32CD32',
-            'completed': '#008000',
-            'collected': '#4B0082'
+        # Status colors and emojis
+        status_config = {
+            'pending': {'emoji': '⏳', 'color': '#FFA500'},
+            'preparing': {'emoji': '👨‍🍳', 'color': '#1E90FF'}, 
+            'ready': {'emoji': '✅', 'color': '#32CD32'},
+            'completed': {'emoji': '🎉', 'color': '#008000'},
+            'collected': {'emoji': '📦', 'color': '#4B0082'}
         }
         
-        status_color = status_colors.get(current_status, '#666666')
+        status_info = status_config.get(current_status, status_config['pending'])
         
         # Create expander for each order
-        with st.expander(f"Order #{order_id} - {customer_name} - R{total_amount} - {current_status.title()}", expanded=current_status in ['pending', 'preparing']):
+        with st.expander(f"{status_info['emoji']} Order #{order_id} - {customer_name} - R{total_amount} - {current_status.title()}", expanded=current_status in ['pending', 'preparing']):
             col1, col2 = st.columns([3, 2])
             
             with col1:
-                st.write(f"**Customer:** {customer_name}")
-                st.write(f"**Type:** {order_type.title()}")
+                st.write(f"**👤 Customer:** {customer_name}")
+                st.write(f"**🎯 Type:** {order_type.title()}")
+                st.write(f"**💳 Payment:** {payment_method.title()}")
                 if order_type == 'dine-in' and table_num:
-                    st.write(f"**Table:** {table_num}")
-                st.write(f"**Time:** {order_time}")
-                st.write(f"**Items:** {items}")
+                    st.write(f"**🪑 Table:** {table_num}")
+                st.write(f"**🕒 Time:** {order_time}")
+                st.write(f"**📦 Items ({item_count}):** {items}")
                 if notes:
-                    st.write(f"**Notes:** {notes}")
-                st.write(f"**Current Status:** **{current_status.title()}**")
+                    st.write(f"**📝 Notes:** {notes}")
+                st.write(f"**💰 Total:** R {total_amount}")
+                st.write(f"**📊 Status:** **{current_status.title()}**")
             
             with col2:
                 # Status update section
-                st.write("Update Status")
+                st.write("### 🔄 Update Status")
                 
                 # Status options
                 status_options = ['pending', 'preparing', 'ready', 'completed', 'collected']
@@ -1244,21 +1312,168 @@ def staff_dashboard():
                 )
                 
                 # Update button
-                if st.button("Update Status", key=f"update_btn_{order_id}", type="primary" if new_status != current_status else "secondary"):
+                if st.button("🔄 Update Status", key=f"update_btn_{order_id}", type="primary" if new_status != current_status else "secondary"):
                     try:
                         success = db.update_order_status(order_id, new_status, f"Status updated by staff")
                         if success:
-                            st.success(f"Order #{order_id} status updated to {new_status}!")
+                            st.success(f"✅ Order #{order_id} status updated to {new_status}!")
                             time.sleep(1)
                             st.rerun()
                         else:
-                            st.error("Failed to update status")
+                            st.error("❌ Failed to update status")
                     except Exception as e:
-                        st.error(f"Error updating status: {str(e)}")
+                        st.error(f"❌ Error updating status: {str(e)}")
+
+# Enhanced Analytics Dashboard
+def analytics_dashboard():
+    st.title("📊 Analytics Dashboard")
+    
+    # Time period selector
+    days = st.sidebar.selectbox("📅 Select Time Period", [7, 30, 90], index=1)
+    
+    # Get real analytics data
+    analytics_data = db.get_real_analytics(days)
+    
+    if not analytics_data:
+        st.warning("📭 No real data available yet. Analytics will show real data as orders are placed.")
+        return
+    
+    totals = analytics_data['totals']
+    daily_trend = analytics_data['daily_trend']
+    hourly_data = analytics_data['hourly_data']
+    popular_dishes = analytics_data['popular_dishes']
+    category_distribution = analytics_data['category_distribution']
+    payment_distribution = analytics_data['payment_distribution']
+    
+    # Key Metrics
+    st.subheader("📈 Key Performance Indicators")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_orders = totals[0] if totals else 0
+        st.metric("📦 Total Orders", total_orders)
+    
+    with col2:
+        total_revenue = totals[1] if totals else 0
+        st.metric("💰 Total Revenue", f"R {total_revenue:,.0f}")
+    
+    with col3:
+        avg_order_value = totals[2] if totals else 0
+        st.metric("📊 Average Order", f"R {avg_order_value:.0f}")
+    
+    with col4:
+        if popular_dishes:
+            most_popular = popular_dishes[0][0] if popular_dishes else "No data"
+            st.metric("🏆 Most Popular", most_popular)
+        else:
+            st.metric("🏆 Most Popular", "No data")
+    
+    # Charts Section
+    st.markdown("---")
+    
+    # Line Chart - Daily Revenue Trend
+    if daily_trend:
+        st.subheader("📈 Daily Revenue Trend")
+        daily_df = pd.DataFrame(daily_trend, columns=['date', 'orders', 'revenue'])
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
+        
+        fig_line = px.line(
+            daily_df, 
+            x='date', 
+            y='revenue',
+            title='Daily Revenue Trend',
+            labels={'revenue': 'Revenue (R)', 'date': 'Date'}
+        )
+        fig_line.update_traces(line=dict(color='#667eea', width=3))
+        fig_line.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_line, use_container_width=True)
+    
+    # Bar Chart - Revenue by Hour
+    if hourly_data:
+        st.subheader("🕒 Revenue by Hour")
+        hourly_df = pd.DataFrame(hourly_data, columns=['hour', 'orders', 'revenue'])
+        hourly_df['hour'] = hourly_df['hour'].astype(int)
+        hourly_df = hourly_df.sort_values('hour')
+        
+        fig_bar = px.bar(
+            hourly_df,
+            x='hour',
+            y='revenue',
+            title='Revenue by Hour of Day',
+            labels={'revenue': 'Revenue (R)', 'hour': 'Hour'},
+            color='revenue',
+            color_continuous_scale='Viridis'
+        )
+        fig_bar.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Pie Chart - Category Distribution
+    if category_distribution:
+        st.subheader("🥧 Menu Category Distribution")
+        category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'revenue', 'orders'])
+        
+        fig_pie = px.pie(
+            category_df,
+            values='quantity',
+            names='category',
+            title='Items Sold by Category',
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_pie.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    # Bar Chart - Popular Dishes
+    if popular_dishes:
+        st.subheader("🍽️ Top 10 Popular Dishes")
+        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
+        dishes_df = dishes_df.head(10)
+        
+        fig_dishes = px.bar(
+            dishes_df,
+            x='dish',
+            y='quantity',
+            title='Most Popular Dishes by Quantity Sold',
+            labels={'quantity': 'Quantity Sold', 'dish': 'Dish Name'},
+            color='quantity',
+            color_continuous_scale='Viridis'
+        )
+        fig_dishes.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            xaxis_tickangle=-45
+        )
+        st.plotly_chart(fig_dishes, use_container_width=True)
+    
+    # Payment Method Distribution
+    if payment_distribution:
+        st.subheader("💳 Payment Method Distribution")
+        payment_df = pd.DataFrame(payment_distribution, columns=['method', 'orders', 'revenue'])
+        
+        fig_payment = px.pie(
+            payment_df,
+            values='orders',
+            names='method',
+            title='Orders by Payment Method',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig_payment.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_payment, use_container_width=True)
 
 # QR Code Management for Staff Only
 def qr_management():
-    st.title("QR Code Management")
+    st.title("📱 QR Code Management")
     
     st.markdown("""
     ### Generate QR Code for Customer Ordering
@@ -1292,58 +1507,25 @@ def qr_management():
         # Download link
         st.markdown(get_qr_download_link(qr_img), unsafe_allow_html=True)
         
-        st.info("Place QR codes on tables, at the entrance, and near the counter for maximum visibility.")
-
-# Analytics Dashboard
-def analytics_dashboard():
-    st.title("Analytics Dashboard")
-    
-    # Time period selector
-    days = st.sidebar.selectbox("Select Time Period", [7, 30, 90], index=1)
-    
-    # Get real analytics data
-    analytics_data = db.get_real_analytics(days)
-    
-    if not analytics_data:
-        st.warning("No real data available yet. Analytics will show real data as orders are placed.")
-        return
-    
-    totals = analytics_data['totals']
-    daily_trend = analytics_data['daily_trend']
-    
-    # Key Metrics
-    st.subheader("Key Performance Indicators")
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        total_orders = totals[0] if totals else 0
-        st.metric("Total Orders", total_orders)
-    
-    with col2:
-        total_revenue = totals[1] if totals else 0
-        st.metric("Total Revenue", f"R {total_revenue:,.0f}")
-    
-    with col3:
-        avg_order_value = totals[2] if totals else 0
-        st.metric("Average Order", f"R {avg_order_value:.0f}")
+        st.info("💡 **Tip:** Place QR codes on tables, at the entrance, and near the counter for maximum visibility.")
 
 # Main navigation for staff
 def staff_navigation():
-    st.sidebar.title("Staff Portal")
+    st.sidebar.title("👨‍💼 Staff Portal")
     st.sidebar.write(f"Welcome, {st.session_state.user[1]}!")
     
-    if st.sidebar.button("Logout", type="primary"):
+    if st.sidebar.button("🚪 Logout", type="primary"):
         logout()
     
     st.sidebar.markdown("---")
     
-    page = st.sidebar.radio("Navigation", ["Kitchen Dashboard", "Analytics", "QR Codes"])
+    page = st.sidebar.radio("Navigation", ["👨‍🍳 Kitchen Dashboard", "📊 Analytics", "📱 QR Codes"])
     
-    if page == "Kitchen Dashboard":
+    if page == "👨‍🍳 Kitchen Dashboard":
         staff_dashboard()
-    elif page == "Analytics":
+    elif page == "📊 Analytics":
         analytics_dashboard()
-    elif page == "QR Codes":
+    elif page == "📱 QR Codes":
         qr_management()
 
 # Main app with smart navigation
@@ -1358,6 +1540,22 @@ def main():
     # Initialize session state
     init_session_state()
     
+    # Custom CSS for dark/light mode compatibility
+    st.markdown("""
+    <style>
+    .main-header {
+        font-size: 3rem;
+        text-align: center;
+        color: var(--text-color);
+        margin-bottom: 2rem;
+    }
+    .feature-card, .step-card {
+        color: var(--text-color) !important;
+        background: var(--background-color) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
     # Main navigation - Customer vs Staff
     if st.session_state.logged_in:
         # Staff interface
@@ -1371,20 +1569,20 @@ def main():
             st.sidebar.empty()
             
             # Simple mobile navigation
-            st.title("Sanele Restaurant")
+            st.markdown('<h2 class="main-header">🍽️ Sanele Restaurant</h2>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                if st.button("Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
+                if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
                     st.session_state.current_page = "home"
                     st.rerun()
             with col2:
-                if st.button("Order", use_container_width=True, type="primary" if st.session_state.current_page == "order" else "secondary"):
+                if st.button("🍕 Order", use_container_width=True, type="primary" if st.session_state.current_page == "order" else "secondary"):
                     st.session_state.current_page = "order"
                     st.session_state.current_step = "order_type"
                     st.rerun()
             with col3:
-                if st.button("Track", use_container_width=True, type="primary" if st.session_state.current_page == "track" else "secondary"):
+                if st.button("📱 Track", use_container_width=True, type="primary" if st.session_state.current_page == "track" else "secondary"):
                     st.session_state.current_page = "track"
                     st.rerun()
             
@@ -1400,25 +1598,25 @@ def main():
                 
         else:
             # DESKTOP INTERFACE - Full features
-            st.sidebar.title("Sanele Restaurant")
+            st.sidebar.title("🍽️ Sanele Restaurant")
             st.sidebar.markdown("---")
             
             # Customer navigation
-            st.sidebar.subheader("Customer")
+            st.sidebar.subheader("🎯 Customer")
             app_mode = st.sidebar.radio("Choose your action:", 
-                                      ["Home", "Place Order", "Track Order"])
+                                      ["🏠 Home", "🍕 Place Order", "📱 Track Order"])
             
             # Staff login section
             st.sidebar.markdown("---")
-            st.sidebar.subheader("Staff Portal")
+            st.sidebar.subheader("👨‍💼 Staff Portal")
             staff_login()
             
             # Main content area
-            if app_mode == "Home":
+            if app_mode == "🏠 Home":
                 show_landing_page()
-            elif app_mode == "Place Order":
+            elif app_mode == "🍕 Place Order":
                 customer_ordering()
-            elif app_mode == "Track Order":
+            elif app_mode == "📱 Track Order":
                 track_order()
 
 if __name__ == "__main__":
