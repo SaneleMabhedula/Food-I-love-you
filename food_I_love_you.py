@@ -12,6 +12,7 @@ from io import BytesIO
 import base64
 import pytz
 import os
+import requests
 
 # Set South African timezone
 SA_TIMEZONE = pytz.timezone('Africa/Johannesburg')
@@ -133,33 +134,33 @@ class RestaurantDB:
         # Clear existing menu items and insert new South African menu
         cursor.execute('DELETE FROM menu_items')
         
-        # FIXED: Using only reliable Unsplash image URLs
+        # FIXED: Using simple, reliable image URLs that work in Streamlit
         south_african_menu = [
             # STARTERS
-            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1603100055781-cab7adf375b1?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
+            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?ixlib=rb-4.0.3&w=400'),
+            ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1603100055781-cab7adf375b1?ixlib=rb-4.0.3&w=400'),
 
             # MAIN COURSES
-            ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1565299588453-b8ec840b7c7e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1551024506-0bccd828d307?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1512058564366-18510be2db19?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550317138-10000687a72b?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
+            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
+            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1565299588453-b8ec840b7c7e?ixlib=rb-4.0.3&w=400'),
+            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400'),
+            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1551024506-0bccd828d307?ixlib=rb-4.0.3&w=400'),
+            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1512058564366-18510be2db19?ixlib=rb-4.0.3&w=400'),
+            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550317138-10000687a72b?ixlib=rb-4.0.3&w=400'),
+            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400'),
 
             # DESSERTS
-            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1555507036-ab794f27d2e9?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
+            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
+            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1555507036-ab794f27d2e9?ixlib=rb-4.0.3&w=400'),
+            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400'),
 
             # BEVERAGES
-            ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400&h=300&fit=crop')
+            ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
+            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
+            ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400'),
+            ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400')
         ]
         
         for item in south_african_menu:
@@ -585,8 +586,18 @@ def show_order_type_selection():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # FIXED: Using reliable Unsplash image
-        st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
+        # FIXED: Simple image URL
+        try:
+            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
+                    use_container_width=True, caption="Dine In Experience")
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                        height: 150px; display: flex; align-items: center; justify-content: center;">
+                <h3>🏠 Dine In</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
         if st.button("🏠 **Dine In**", use_container_width=True, key="dine_in_btn"):
             st.session_state.order_type = "dine-in"
             st.session_state.current_step = "customer_info"
@@ -594,8 +605,18 @@ def show_order_type_selection():
         st.caption("Enjoy our cozy atmosphere")
     
     with col2:
-        # FIXED: Using reliable Unsplash image
-        st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
+        # FIXED: Simple image URL
+        try:
+            st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3", 
+                    use_container_width=True, caption="Takeaway Experience")
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                        height: 150px; display: flex; align-items: center; justify-content: center;">
+                <h3>🥡 Takeaway</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
         if st.button("🥡 **Takeaway**", use_container_width=True, key="takeaway_btn"):
             st.session_state.order_type = "takeaway"
             st.session_state.current_step = "customer_info"
@@ -603,8 +624,18 @@ def show_order_type_selection():
         st.caption("Pick up and enjoy elsewhere")
     
     with col3:
-        # FIXED: Using reliable Unsplash image
-        st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3&w=300&h=200&fit=crop", use_container_width=True)
+        # FIXED: Simple image URL
+        try:
+            st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3", 
+                    use_container_width=True, caption="Delivery Experience")
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                        height: 150px; display: flex; align-items: center; justify-content: center;">
+                <h3>🚚 Delivery</h3>
+            </div>
+            """, unsafe_allow_html=True)
+        
         if st.button("🚚 **Delivery**", use_container_width=True, key="delivery_btn"):
             st.session_state.order_type = "delivery"
             st.session_state.current_step = "customer_info"
@@ -685,6 +716,8 @@ def show_menu_selection():
         height: 200px;
         color: #666;
         font-weight: bold;
+        text-align: center;
+        padding: 1rem;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -701,9 +734,9 @@ def show_menu_selection():
     except:
         # Fallback if database error - use new menu items
         menu_items = [
-            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            (2, 'Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400&h=300&fit=crop'),
-            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400&h=300&fit=crop')
+            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3'),
+            (2, 'Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3'),
+            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3')
         ]
     
     # Display menu items
@@ -712,15 +745,29 @@ def show_menu_selection():
             col1, col2 = st.columns([1, 2])
             
             with col1:
-                # Display food image with fallback
+                # Display food image with enhanced fallback
                 image_url = item[6] if len(item) > 6 and item[6] else None
                 if image_url:
                     try:
-                        st.image(image_url, use_container_width=True, caption="")
-                    except:
-                        st.markdown(f'<div class="fallback-image">🍽️ {item[1]}</div>', unsafe_allow_html=True)
+                        st.image(image_url, use_container_width=True, caption=item[1])
+                    except Exception as e:
+                        st.markdown(f'''
+                        <div class="fallback-image">
+                            <div>
+                                <div style="font-size: 3rem;">🍽️</div>
+                                <div>{item[1]}</div>
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
                 else:
-                    st.markdown(f'<div class="fallback-image">🍽️ {item[1]}</div>', unsafe_allow_html=True)
+                    st.markdown(f'''
+                    <div class="fallback-image">
+                        <div>
+                            <div style="font-size: 3rem;">🍽️</div>
+                            <div>{item[1]}</div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
             
             with col2:
                 st.subheader(f"🍽️ {item[1]}")
@@ -1102,7 +1149,7 @@ def show_landing_page():
         margin-bottom: 3rem;
     }
     .feature-card {
-        background: var(--background-color);
+        background: white;
         padding: 2rem;
         border-radius: 15px;
         box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -1110,19 +1157,17 @@ def show_landing_page():
         margin: 1rem;
         border-left: 5px solid #667eea;
         transition: transform 0.3s ease;
-        color: var(--text-color);
     }
     .feature-card:hover {
         transform: translateY(-5px);
     }
     .step-card {
-        background: var(--background-color);
+        background: white;
         padding: 1.5rem;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         text-align: center;
         margin: 0.5rem;
-        color: var(--text-color);
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1166,9 +1211,17 @@ def show_landing_page():
             st.rerun()
     
     with col2:
-        # FIXED: Using reliable Unsplash image
-        st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400", 
-                use_container_width=True, caption="Our Beautiful Restaurant")
+        # FIXED: Simple image with fallback
+        try:
+            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
+                    use_container_width=True, caption="Our Beautiful Restaurant")
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                        height: 200px; display: flex; align-items: center; justify-content: center;">
+                <h3>🏛️ Our Restaurant</h3>
+            </div>
+            """, unsafe_allow_html=True)
     
     # Features Grid
     st.markdown("---")
@@ -1232,18 +1285,26 @@ def show_landing_page():
     st.subheader("🏛️ Our Restaurant")
     
     gallery = st.columns(3)
-    # FIXED: All reliable Unsplash images
+    # FIXED: Simple image URLs
     gallery_images = [
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3&w=400",
-        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3&w=400", 
-        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.3&w=400"
+        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3",
+        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3", 
+        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.3"
     ]
     
     captions = ["Elegant Dining Area", "Modern Kitchen", "Cozy Atmosphere"]
     
     for idx, col in enumerate(gallery):
         with col:
-            st.image(gallery_images[idx], use_container_width=True, caption=captions[idx])
+            try:
+                st.image(gallery_images[idx], use_container_width=True, caption=captions[idx])
+            except:
+                st.markdown(f"""
+                <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                            height: 150px; display: flex; align-items: center; justify-content: center;">
+                    <h4>{captions[idx]}</h4>
+                </div>
+                """, unsafe_allow_html=True)
 
 # Staff Dashboard with real-time updates
 def staff_dashboard():
@@ -1587,10 +1648,6 @@ def main():
         text-align: center;
         color: var(--text-color);
         margin-bottom: 2rem;
-    }
-    .feature-card, .step-card {
-        color: var(--text-color) !important;
-        background: var(--background-color) !important;
     }
     </style>
     """, unsafe_allow_html=True)
