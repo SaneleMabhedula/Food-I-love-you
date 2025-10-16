@@ -162,23 +162,33 @@ class RestaurantDB:
         count = cursor.fetchone()[0]
         
         if count == 0:
-            # Updated South African menu items with lower prices
+            # COMPLETELY NEW SOUTH AFRICAN MENU with affordable prices
             south_african_menu = [
-                ('Braai Platter', 'Traditional barbecue with boerewors, chops and steak', 185, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
-                ('Bobotie', 'Spiced minced meat baked with egg topping', 125, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
-                ('Bunny Chow', 'Hollowed bread filled with curry', 95, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
-                ('Pap and Wors', 'Maize meal porridge with boerewors', 75, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
-                ('Potjiekos', 'Slow-cooked stew in three-legged pot', 145, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
-                ('Melktert', 'Traditional milk tart with cinnamon', 45, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
-                ('Koeksisters', 'Sweet syrupy plaited doughnuts', 35, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
-                ('Biltong', 'Dried cured meat traditional snack', 55, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
-                ('Boerewors Roll', 'Sausage in roll with chakalaka', 65, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
-                ('Amarula Cream', 'Cream liqueur with marula fruit', 45, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
-                ('Rooibos Tea', 'Traditional herbal tea', 25, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
-                ('Chakalaka Salad', 'Spicy vegetable relish side', 35, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400'),
-                ('Samp and Beans', 'Traditional maize and bean dish', 85, 'Main Course', 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&w=400'),
-                ('Vetkoek', 'Fried dough bread with mince', 65, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
-                ('Malva Pudding', 'Sweet apricot pudding', 55, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400')
+                # STARTERS
+                ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1544025162-d76694265947?ixlib=rb-4.0.3&w=400'),
+                ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?ixlib=rb-4.0.3&w=400'),
+                ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?ixlib=rb-4.0.3&w=400'),
+                
+                # MAIN COURSES
+                ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
+                ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?ixlib=rb-4.0.3&w=400'),
+                ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?ixlib=rb-4.0.3&w=400'),
+                ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
+                ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1552611052-33b04c4faeae?ixlib=rb-4.0.3&w=400'),
+                ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?ixlib=rb-4.0.3&w=400'),
+                ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550949987-85b3e8e59c1a?ixlib=rb-4.0.3&w=400'),
+                ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
+                
+                # DESSERTS
+                ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
+                ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1576613109753-27804de2ccba?ixlib=rb-4.0.3&w=400'),
+                ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400'),
+                
+                # BEVERAGES
+                ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
+                ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
+                ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400'),
+                ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400')
             ]
             
             for item in south_african_menu:
@@ -699,11 +709,11 @@ def show_menu_selection():
     try:
         menu_items = db.get_menu_items(None if selected_category == 'All' else selected_category)
     except:
-        # Fallback if database error
+        # Fallback if database error - use new menu items
         menu_items = [
-            (1, 'Braai Platter', 'Traditional South African barbecue', 185, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?w=400'),
-            (2, 'Bobotie', 'Spiced minced meat with egg topping', 125, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?w=400'),
-            (3, 'Bunny Chow', 'Bread filled with curry', 95, 'Main Course', 1, 'https://images.unsplash.com/photo-1455619452474-d2be8b1e70cd?w=400')
+            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://images.unsplash.com/photo-1544025162-d76694265947?w=400'),
+            (2, 'Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?w=400'),
+            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299585323-38174c13fae8?w=400')
         ]
     
     # Display menu items
