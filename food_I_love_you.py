@@ -1072,7 +1072,7 @@ def show_landing_page():
         speed, and customer satisfaction sets us apart from the rest.
         """)
         
-        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True, use_container_width=True):
+        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True):
             st.session_state.current_step = "order_type"
             st.session_state.current_page = "order"
             st.rerun()
@@ -1255,7 +1255,7 @@ def main():
             elif app_mode == "📱 Track Order":
                 track_order()
 
-# Staff navigation function (you'll need to implement this)
+# Staff navigation function
 def staff_navigation():
     st.sidebar.title("👨‍💼 Staff Portal")
     st.sidebar.write(f"Welcome, {st.session_state.user[1]}!")
