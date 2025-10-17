@@ -460,51 +460,54 @@ class RestaurantDB:
         return True
     
     def get_order_by_token(self, order_token):
-        """Fixed function to properly retrieve order by token"""
+        """FIXED: Simple and reliable order retrieval by token"""
         cursor = self.conn.cursor()
         try:
-            # First get the basic order info
-            cursor.execute('''
-                SELECT * FROM orders WHERE order_token = ?
-            ''', (order_token,))
-            order_data = cursor.fetchone()
+            # Get the order
+            cursor.execute('SELECT * FROM orders WHERE order_token = ?', (order_token,))
+            order = cursor.fetchone()
             
-            if not order_data:
+            if not order:
                 return None
-            
-            # Then get the order items
+                
+            # Get order items
             cursor.execute('''
-                SELECT menu_item_name, quantity 
+                SELECT menu_item_name, quantity, price, special_instructions 
                 FROM order_items 
                 WHERE order_id = ?
-            ''', (order_data[0],))
-            items_data = cursor.fetchall()
+            ''', (order[0],))
+            items = cursor.fetchall()
             
             # Format items string
-            items_list = [f"{item[0]} (x{item[1]})" for item in items_data]
-            items_str = ", ".join(items_list)
+            items_list = []
+            for item in items:
+                item_str = f"{item[0]} (x{item[1]})"
+                if item[3]:  # special instructions
+                    item_str += f" - {item[3]}"
+                items_list.append(item_str)
             
-            # Create a complete order tuple with all needed data
-            complete_order = (
-                order_data[0],  # id
-                order_data[1],  # table_number
-                order_data[2],  # customer_name
-                order_data[3],  # order_type
-                order_data[4],  # status
-                order_data[5],  # total_amount
-                order_data[6],  # order_date
-                order_data[7],  # notes
-                order_data[8],  # estimated_wait_time
-                order_data[9],  # order_token
-                order_data[10], # payment_method
-                items_str,      # items
-                len(items_data) # item_count
+            items_str = ", ".join(items_list)
+            item_count = len(items)
+            
+            # Return complete order info as a tuple matching expected structure
+            return (
+                order[0],   # id
+                order[1],   # table_number
+                order[2],   # customer_name
+                order[3],   # order_type
+                order[4],   # status
+                order[5],   # total_amount
+                order[6],   # order_date
+                order[7],   # notes
+                order[8],   # estimated_wait_time
+                order[9],   # order_token
+                order[10],  # payment_method
+                items_str,  # items
+                item_count  # item_count
             )
             
-            return complete_order
-            
         except Exception as e:
-            st.error(f"Error in get_order_by_token: {e}")
+            st.error(f"Database error in get_order_by_token: {e}")
             return None
     
     def get_order_status_history(self, order_id):
