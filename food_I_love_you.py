@@ -140,7 +140,7 @@ class RestaurantDB:
             ('Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
             ('Coca-Cola', 'Ice cold Coca-Cola', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3'),
             ('Orange Juice', 'Freshly squeezed orange juice', 22, 'Beverage', 'https://images.unsplash.com/photo-1613478223719-2ab802602423?ixlib=rb-4.0.3'),
-            ('Bottled Water', '500ml still water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3'),
+            ('Bottled Water', '500ml still water', 15, 'Beverage', 'bottled_water.jpg'),  # Local image
             
             # BURGERS
             ('Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
@@ -149,18 +149,18 @@ class RestaurantDB:
             
             # GRILLED ITEMS
             ('Grilled Chicken', 'Tender grilled chicken breast with herbs', 85, 'Main Course', 'https://images.unsplash.com/photo-1532550907401-a500c9a57435?ixlib=rb-4.0.3'),
-            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'https://images.unsplash.com/photo-1607116667981-0d2b54b5b0ee?ixlib=rb-4.0.3'),
+            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'beef_steak.jpg'),  # Local image
             ('Grilled Fish', 'Fresh fish with lemon butter sauce', 95, 'Main Course', 'https://images.unsplash.com/photo-1598514982191-4333db1a6afc?ixlib=rb-4.0.3'),
             
             # DESSERTS
             ('Chocolate Cake', 'Rich chocolate cake with ganache', 35, 'Dessert', 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?ixlib=rb-4.0.3'),
             ('Ice Cream', 'Vanilla ice cream with chocolate sauce', 25, 'Dessert', 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?ixlib=rb-4.0.3'),
-            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'https://images.unsplash.com/photo-1535920527002-b35e96722206?ixlib=rb-4.0.3'),
+            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'apple_pie.jpg'),  # Local image
             
             # SIDES
             ('French Fries', 'Crispy golden fries', 25, 'Starter', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?ixlib=rb-4.0.3'),
-            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'https://images.unsplash.com/photo-1634313354623-e1978d6d3a9f?ixlib=rb-4.0.3'),
-            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?ixlib=rb-4.0.3')
+            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'onion_rings.jpg'),  # Local image
+            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'garlic_bread.jpg')  # Local image
         ]
         
         for item in menu_items:
@@ -742,9 +742,36 @@ def show_menu_selection():
             col1, col2 = st.columns([1, 2])
             
             with col1:
-                # Display food image with enhanced fallback
                 image_url = item[6] if len(item) > 6 and item[6] else None
-                if image_url:
+                
+                # Check if this is a local image file
+                if image_url and (image_url.endswith('.jpeg') or image_url.endswith('.jpg') or image_url.endswith('.png')):
+                    # Try to load local image file
+                    try:
+                        if os.path.exists(image_url):
+                            st.image(image_url, use_container_width=True, caption=item[1])
+                        else:
+                            # If local file doesn't exist, show fallback
+                            st.markdown(f'''
+                            <div class="fallback-image">
+                                <div>
+                                    <div style="font-size: 3rem;">🍽️</div>
+                                    <div>{item[1]}</div>
+                                    <div style="font-size: 0.8rem; margin-top: 10px;">📁 {image_url} not found</div>
+                                </div>
+                            </div>
+                            ''', unsafe_allow_html=True)
+                    except Exception as e:
+                        st.markdown(f'''
+                        <div class="fallback-image">
+                            <div>
+                                <div style="font-size: 3rem;">🍽️</div>
+                                <div>{item[1]}</div>
+                            </div>
+                        </div>
+                        ''', unsafe_allow_html=True)
+                elif image_url and image_url.startswith('http'):
+                    # Use external URL for other items
                     try:
                         st.image(image_url, use_container_width=True, caption=item[1])
                     except Exception as e:
@@ -757,6 +784,7 @@ def show_menu_selection():
                         </div>
                         ''', unsafe_allow_html=True)
                 else:
+                    # No image available
                     st.markdown(f'''
                     <div class="fallback-image">
                         <div>
