@@ -171,248 +171,6 @@ class RestaurantDB:
         
         self.conn.commit()
 
-    def get_real_analytics(self, days=30):
-        """Get real analytics data from the database"""
-        cursor = self.conn.cursor()
-        
-        try:
-            # Total revenue and orders for the period
-            cursor.execute('''
-                SELECT 
-                    COUNT(*) as total_orders,
-                    COALESCE(SUM(total_amount), 0) as total_revenue,
-                    COALESCE(AVG(total_amount), 0) as avg_order_value
-                FROM orders 
-                WHERE order_date >= datetime('now', '-' || ? || ' days')
-            ''', (days,))
-            totals = cursor.fetchone()
-            
-            # Daily revenue trend
-            cursor.execute('''
-                SELECT 
-                    date(order_date) as order_day,
-                    COUNT(*) as daily_orders,
-                    COALESCE(SUM(total_amount), 0) as daily_revenue
-                FROM orders 
-                WHERE order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY order_day
-                ORDER BY order_day
-            ''', (days,))
-            daily_data = cursor.fetchall()
-            
-            # Revenue by hour
-            cursor.execute('''
-                SELECT 
-                    strftime('%H', order_date) as hour,
-                    COUNT(*) as order_count,
-                    COALESCE(SUM(total_amount), 0) as hourly_revenue
-                FROM orders 
-                WHERE order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY hour
-                ORDER BY hour
-            ''', (days,))
-            hourly_data = cursor.fetchall()
-            
-            # Popular dishes
-            cursor.execute('''
-                SELECT 
-                    oi.menu_item_name,
-                    SUM(oi.quantity) as total_quantity,
-                    SUM(oi.quantity * oi.price) as total_revenue,
-                    COUNT(DISTINCT oi.order_id) as order_count
-                FROM order_items oi
-                JOIN orders o ON oi.order_id = o.id
-                WHERE o.order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY oi.menu_item_name
-                ORDER BY total_quantity DESC
-                LIMIT 10
-            ''', (days,))
-            popular_dishes = cursor.fetchall()
-            
-            # Category distribution
-            cursor.execute('''
-                SELECT 
-                    mi.category,
-                    SUM(oi.quantity) as total_quantity,
-                    SUM(oi.quantity * oi.price) as total_revenue,
-                    COUNT(DISTINCT oi.order_id) as order_count
-                FROM order_items oi
-                JOIN orders o ON oi.order_id = o.id
-                JOIN menu_items mi ON oi.menu_item_id = mi.id
-                WHERE o.order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY mi.category
-                ORDER BY total_quantity DESC
-            ''', (days,))
-            category_distribution = cursor.fetchall()
-            
-            # Payment method distribution
-            cursor.execute('''
-                SELECT 
-                    payment_method,
-                    COUNT(*) as order_count,
-                    COALESCE(SUM(total_amount), 0) as total_revenue
-                FROM orders 
-                WHERE order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY payment_method
-            ''', (days,))
-            payment_distribution = cursor.fetchall()
-            
-            # Order type distribution
-            cursor.execute('''
-                SELECT 
-                    order_type,
-                    COUNT(*) as order_count,
-                    COALESCE(SUM(total_amount), 0) as total_revenue
-                FROM orders 
-                WHERE order_date >= datetime('now', '-' || ? || ' days')
-                GROUP BY order_type
-            ''', (days,))
-            order_type_distribution = cursor.fetchall()
-            
-            return {
-                'totals': totals,
-                'daily_trend': daily_data,
-                'hourly_data': hourly_data,
-                'popular_dishes': popular_dishes,
-                'category_distribution': category_distribution,
-                'payment_distribution': payment_distribution,
-                'order_type_distribution': order_type_distribution
-            }
-            
-        except Exception as e:
-            st.error(f"Error in get_real_analytics: {e}")
-            # Return sample data for demo
-            return self.get_sample_analytics_data(days)
-    
-    def get_sample_analytics_data(self, days=30):
-        """Generate sample analytics data for demonstration"""
-        # Generate sample daily data
-        daily_data = []
-        base_date = datetime.now() - timedelta(days=days)
-        for i in range(days):
-            date = (base_date + timedelta(days=i)).strftime('%Y-%m-%d')
-            orders = random.randint(5, 20)
-            revenue = random.randint(800, 3000)
-            daily_data.append((date, orders, revenue))
-        
-        # Generate sample hourly data
-        hourly_data = []
-        for hour in range(8, 22):  # 8 AM to 10 PM
-            order_count = random.randint(2, 15)
-            hourly_revenue = random.randint(200, 1200)
-            hourly_data.append((f"{hour:02d}", order_count, hourly_revenue))
-        
-        # Sample popular dishes
-        popular_dishes = [
-            ('Beef Burger', 45, 2925, 38),
-            ('Chicken Burger', 32, 1760, 28),
-            ('Grilled Chicken', 28, 2380, 25),
-            ('Cappuccino', 56, 1400, 45),
-            ('French Fries', 42, 1050, 35),
-            ('Chocolate Cake', 25, 875, 22),
-            ('Beef Steak', 18, 2160, 16),
-            ('Orange Juice', 30, 660, 26),
-            ('Cheese Burger', 15, 1125, 13),
-            ('Garlic Bread', 22, 440, 18)
-        ]
-        
-        # Sample category distribution
-        category_distribution = [
-            ('Main Course', 124, 9230, 98),
-            ('Beverage', 86, 2060, 71),
-            ('Starter', 64, 1490, 53),
-            ('Dessert', 41, 1315, 35)
-        ]
-        
-        # Sample payment distribution
-        payment_distribution = [
-            ('cash', 215, 12560),
-            ('card', 85, 5120)
-        ]
-        
-        # Sample order type distribution
-        order_type_distribution = [
-            ('dine-in', 185, 11240),
-            ('takeaway', 95, 5480),
-            ('delivery', 20, 960)
-        ]
-        
-        totals = (300, 17680, 58.93)
-        
-        return {
-            'totals': totals,
-            'daily_trend': daily_data,
-            'hourly_data': hourly_data,
-            'popular_dishes': popular_dishes,
-            'category_distribution': category_distribution,
-            'payment_distribution': payment_distribution,
-            'order_type_distribution': order_type_distribution
-        }
-    
-    def get_todays_orders_count(self):
-        """Get count of orders from today only"""
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute('''
-                SELECT COUNT(*) 
-                FROM orders 
-                WHERE date(order_date) = date('now')
-            ''')
-            result = cursor.fetchone()
-            return result[0] if result else 0
-        except Exception as e:
-            st.error(f"Error getting today's orders: {e}")
-            return 0
-    
-    def get_all_orders(self, status=None):
-        """Get orders with optional status filter"""
-        cursor = self.conn.cursor()
-        if status:
-            cursor.execute('SELECT * FROM orders WHERE status = ? ORDER BY order_date DESC', (status,))
-        else:
-            cursor.execute('SELECT * FROM orders ORDER BY order_date DESC')
-        return cursor.fetchall()
-    
-    def get_active_orders(self):
-        """Get orders that are not completed/collected"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT o.*, 
-                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
-                   COUNT(oi.id) as item_count
-            FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
-            WHERE o.status NOT IN ('completed', 'collected')
-            GROUP BY o.id 
-            ORDER BY o.order_date DESC
-        ''')
-        return cursor.fetchall()
-    
-    def get_recent_orders(self, limit=25):
-        """Get recent orders with proper ordering"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT o.*, 
-                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
-                   COUNT(oi.id) as item_count
-            FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
-            GROUP BY o.id 
-            ORDER BY o.order_date DESC
-            LIMIT ?
-        ''', (limit,))
-        return cursor.fetchall()
-    
-    def get_menu_items(self, category=None):
-        cursor = self.conn.cursor()
-        query = 'SELECT * FROM menu_items WHERE available = 1'
-        if category:
-            query += f" AND category = '{category}'"
-        query += " ORDER BY category, name"
-        
-        cursor.execute(query)
-        return cursor.fetchall()
-    
     def add_order(self, customer_name, order_type, items, table_number=None, notes="", payment_method="cash"):
         cursor = self.conn.cursor()
         total_amount = sum(item['price'] * item['quantity'] for item in items)
@@ -424,6 +182,7 @@ class RestaurantDB:
         current_time = get_sa_time().strftime('%Y-%m-%d %H:%M:%S')
         
         try:
+            # Insert order
             cursor.execute('''
                 INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -431,6 +190,7 @@ class RestaurantDB:
             
             order_id = cursor.lastrowid
             
+            # Insert order items
             for item in items:
                 cursor.execute('''
                     INSERT INTO order_items (order_id, menu_item_id, menu_item_name, quantity, price, special_instructions)
@@ -446,8 +206,9 @@ class RestaurantDB:
             self.conn.commit()
             
             # Verify the order was created
-            cursor.execute('SELECT COUNT(*) FROM orders WHERE order_token = ?', (order_token,))
-            if cursor.fetchone()[0] == 0:
+            cursor.execute('SELECT id FROM orders WHERE order_token = ?', (order_token,))
+            result = cursor.fetchone()
+            if not result:
                 raise Exception("Order was not created successfully")
                 
             return order_id, order_token
@@ -456,30 +217,17 @@ class RestaurantDB:
             self.conn.rollback()
             st.error(f"Error adding order: {e}")
             raise e
-    
-    def update_order_status(self, order_id, new_status, notes=""):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            UPDATE orders SET status = ? WHERE id = ?
-        ''', (new_status, order_id))
-        
-        cursor.execute('''
-            INSERT INTO order_status_history (order_id, status, notes)
-            VALUES (?, ?, ?)
-        ''', (order_id, new_status, notes))
-        
-        self.conn.commit()
-        return True
-    
+
     def get_order_by_token(self, order_token):
-        """FIXED: Simple and reliable order retrieval by token"""
+        """COMPLETELY REWRITTEN: Simple and reliable order retrieval"""
         cursor = self.conn.cursor()
         try:
-            # First check if order exists
+            # Get the order
             cursor.execute('SELECT * FROM orders WHERE order_token = ?', (order_token,))
             order = cursor.fetchone()
             
             if not order:
+                st.warning(f"No order found with token: {order_token}")
                 return None
             
             # Get order items
@@ -487,7 +235,7 @@ class RestaurantDB:
                 SELECT menu_item_name, quantity, special_instructions 
                 FROM order_items 
                 WHERE order_id = ?
-            ''', (order[0],))  # order[0] is the order_id
+            ''', (order[0],))
             items = cursor.fetchall()
             
             # Format items string
@@ -501,40 +249,29 @@ class RestaurantDB:
             items_str = ", ".join(items_list)
             item_count = len(items)
             
-            # Create complete order tuple with all fields in correct order
-            complete_order = (
-                order[0],   # id
-                order[1],   # table_number
-                order[2],   # customer_name
-                order[3],   # order_type
-                order[4],   # status
-                order[5],   # total_amount
-                order[6],   # order_date
-                order[7],   # notes
-                order[8],   # estimated_wait_time
-                order[9],   # order_token
-                order[10],  # payment_method
-                items_str,  # items
-                item_count  # item_count
-            )
-            
-            return complete_order
+            # Return complete order info
+            return {
+                'id': order[0],
+                'table_number': order[1],
+                'customer_name': order[2],
+                'order_type': order[3],
+                'status': order[4],
+                'total_amount': order[5],
+                'order_date': order[6],
+                'notes': order[7],
+                'estimated_wait_time': order[8],
+                'order_token': order[9],
+                'payment_method': order[10],
+                'items': items_str,
+                'item_count': item_count
+            }
             
         except Exception as e:
             st.error(f"Database error in get_order_by_token: {e}")
             return None
-    
-    def get_order_status_history(self, order_id):
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT * FROM order_status_history 
-            WHERE order_id = ? 
-            ORDER BY created_at DESC
-        ''', (order_id,))
-        return cursor.fetchall()
-    
+
     def get_order_status(self, order_token):
-        """Get just the current status of an order for live updates"""
+        """Get just the current status of an order"""
         cursor = self.conn.cursor()
         try:
             cursor.execute('SELECT status FROM orders WHERE order_token = ?', (order_token,))
@@ -544,10 +281,96 @@ class RestaurantDB:
             st.error(f"Error getting order status: {e}")
             return None
 
+    def update_order_status(self, order_id, new_status, notes=""):
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            UPDATE orders SET status = ? WHERE id = ?
+        ''', (new_status, order_id))
+        
+        cursor.execute('''
+            INSERT INTO order_status_history (order_id, status, notes)
+            VALUES (?, ?, ?)
+        ''', (order_id, new_status, notes))
+        
+        self.conn.commit()
+        return True
+
+    def get_recent_orders(self, limit=25):
+        """Get recent orders"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute('''
+                SELECT o.*, 
+                       GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
+                       COUNT(oi.id) as item_count
+                FROM orders o
+                LEFT JOIN order_items oi ON o.id = oi.order_id
+                GROUP BY o.id 
+                ORDER BY o.order_date DESC
+                LIMIT ?
+            ''', (limit,))
+            return cursor.fetchall()
+        except Exception as e:
+            st.error(f"Error getting recent orders: {e}")
+            return []
+
+    def get_menu_items(self, category=None):
+        cursor = self.conn.cursor()
+        query = 'SELECT * FROM menu_items WHERE available = 1'
+        if category:
+            query += f" AND category = '{category}'"
+        query += " ORDER BY category, name"
+        
+        cursor.execute(query)
+        return cursor.fetchall()
+
+    def get_all_orders(self, status=None):
+        """Get orders with optional status filter"""
+        cursor = self.conn.cursor()
+        if status:
+            cursor.execute('SELECT * FROM orders WHERE status = ? ORDER BY order_date DESC', (status,))
+        else:
+            cursor.execute('SELECT * FROM orders ORDER BY order_date DESC')
+        return cursor.fetchall()
+
+    def get_active_orders(self):
+        """Get orders that are not completed/collected"""
+        cursor = self.conn.cursor()
+        cursor.execute('''
+            SELECT o.*, 
+                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
+                   COUNT(oi.id) as item_count
+            FROM orders o
+            LEFT JOIN order_items oi ON o.id = oi.order_id
+            WHERE o.status NOT IN ('completed', 'collected')
+            GROUP BY o.id 
+            ORDER BY o.order_date DESC
+        ''')
+        return cursor.fetchall()
+
+    def get_todays_orders_count(self):
+        """Get count of orders from today only"""
+        cursor = self.conn.cursor()
+        try:
+            cursor.execute('''
+                SELECT COUNT(*) 
+                FROM orders 
+                WHERE date(order_date) = date('now')
+            ''')
+            result = cursor.fetchone()
+            return result[0] if result else 0
+        except Exception as e:
+            st.error(f"Error getting today's orders: {e}")
+            return 0
+
+    # ... (other methods remain the same)
+
 # Initialize database
 try:
-
+    if os.path.exists("restaurant.db"):
+        os.remove("restaurant.db")
     db = RestaurantDB()
+    st.success("✅ Database initialized successfully!")
 except Exception as e:
     st.error(f"Database initialization error: {e}")
     import sqlite3
@@ -579,14 +402,6 @@ def get_qr_download_link(img_str, filename="sanele_ordering_qr.png"):
     """Generate download link for QR code"""
     href = f'<a href="data:image/png;base64,{img_str}" download="{filename}" style="display: inline-block; padding: 10px 20px; background: #4CAF50; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">📱 Download QR Code</a>'
     return href
-
-# Smart Device Detection
-def is_mobile_device():
-    """Smart detection for mobile devices"""
-    try:
-        return False  # Default to desktop for now
-    except:
-        return False
 
 # Authentication for staff
 def staff_login():
@@ -651,18 +466,6 @@ def init_session_state():
         st.session_state.last_status_check = None
     if 'current_order_status' not in st.session_state:
         st.session_state.current_order_status = None
-    # Tracking-specific session state
-    if 'tracking_order_token' not in st.session_state:
-        st.session_state.tracking_order_token = None
-    if 'tracking_order_placed' not in st.session_state:
-        st.session_state.tracking_order_placed = False
-    if 'mobile_mode' not in st.session_state:
-        st.session_state.mobile_mode = is_mobile_device()
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = "home"
-    # Auto-refresh for kitchen
-    if 'last_order_check' not in st.session_state:
-        st.session_state.last_order_check = time.time()
 
 # Customer Ordering Interface
 def customer_ordering():
@@ -675,12 +478,6 @@ def customer_ordering():
         color: white;
         text-align: center;
         margin-bottom: 2rem;
-    }
-    .menu-item-image {
-        border-radius: 10px;
-        object-fit: cover;
-        width: 100%;
-        height: 200px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -716,17 +513,6 @@ def show_order_type_selection():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        try:
-            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
-                    use_container_width=True, caption="Dine In Experience")
-        except:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                        height: 150px; display: flex; align-items: center; justify-content: center;">
-                <h3>🏠 Dine In</h3>
-            </div>
-            """, unsafe_allow_html=True)
-        
         if st.button("🏠 **Dine In**", use_container_width=True, key="dine_in_btn"):
             st.session_state.order_type = "dine-in"
             st.session_state.current_step = "customer_info"
@@ -734,17 +520,6 @@ def show_order_type_selection():
         st.caption("Enjoy our cozy atmosphere")
     
     with col2:
-        try:
-            st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3", 
-                    use_container_width=True, caption="Takeaway Experience")
-        except:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                        height: 150px; display: flex; align-items: center; justify-content: center;">
-                <h3>🥡 Takeaway</h3>
-            </div>
-            """, unsafe_allow_html=True)
-        
         if st.button("🥡 **Takeaway**", use_container_width=True, key="takeaway_btn"):
             st.session_state.order_type = "takeaway"
             st.session_state.current_step = "customer_info"
@@ -752,17 +527,6 @@ def show_order_type_selection():
         st.caption("Pick up and enjoy elsewhere")
     
     with col3:
-        try:
-            st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3", 
-                    use_container_width=True, caption="Delivery Experience")
-        except:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                        height: 150px; display: flex; align-items: center; justify-content: center;">
-                <h3>🚚 Delivery</h3>
-            </div>
-            """, unsafe_allow_html=True)
-        
         if st.button("🚚 **Delivery**", use_container_width=True, key="delivery_btn"):
             st.session_state.order_type = "delivery"
             st.session_state.current_step = "customer_info"
@@ -821,34 +585,6 @@ def show_customer_info():
                 st.rerun()
 
 def show_menu_selection():
-    st.markdown("""
-    <style>
-    .menu-item {
-        border: 1px solid #e0e0e0;
-        border-radius: 15px;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        transition: transform 0.2s;
-    }
-    .menu-item:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .fallback-image {
-        background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
-        border-radius: 10px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        height: 200px;
-        color: #666;
-        font-weight: bold;
-        text-align: center;
-        padding: 1rem;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     st.subheader("📋 Explore Our Menu")
     
     # Menu categories
@@ -859,7 +595,7 @@ def show_menu_selection():
     try:
         menu_items = db.get_menu_items(None if selected_category == 'All' else selected_category)
     except:
-        # Fallback if database error - use new menu items
+        # Fallback if database error
         menu_items = [
             (1, 'Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 1, 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
             (2, 'Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 1, 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
@@ -872,57 +608,16 @@ def show_menu_selection():
             col1, col2 = st.columns([1, 2])
             
             with col1:
-                image_url = item[6] if len(item) > 6 and item[6] else None
-                
-                # Check if this is a local image file
-                if image_url and (image_url.endswith('.jpg') or image_url.endswith('.jpeg') or image_url.endswith('.png')):
-                    # Try to load local image file
-                    try:
-                        if os.path.exists(image_url):
-                            st.image(image_url, use_container_width=True, caption=item[1])
-                        else:
-                            # If local file doesn't exist, show fallback
-                            st.markdown(f'''
-                            <div class="fallback-image">
-                                <div>
-                                    <div style="font-size: 3rem;">🍽️</div>
-                                    <div>{item[1]}</div>
-                                    <div style="font-size: 0.8rem; margin-top: 10px;">📁 {image_url} not found</div>
-                                </div>
-                            </div>
-                            ''', unsafe_allow_html=True)
-                    except Exception as e:
-                        st.markdown(f'''
-                        <div class="fallback-image">
-                            <div>
-                                <div style="font-size: 3rem;">🍽️</div>
-                                <div>{item[1]}</div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                elif image_url and image_url.startswith('http'):
-                    # Use external URL for other items
-                    try:
-                        st.image(image_url, use_container_width=True, caption=item[1])
-                    except Exception as e:
-                        st.markdown(f'''
-                        <div class="fallback-image">
-                            <div>
-                                <div style="font-size: 3rem;">🍽️</div>
-                                <div>{item[1]}</div>
-                            </div>
-                        </div>
-                        ''', unsafe_allow_html=True)
-                else:
-                    # No image available
-                    st.markdown(f'''
-                    <div class="fallback-image">
-                        <div>
-                            <div style="font-size: 3rem;">🍽️</div>
-                            <div>{item[1]}</div>
-                        </div>
+                # Simple image placeholder
+                st.markdown(f'''
+                <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                            height: 150px; display: flex; align-items: center; justify-content: center;">
+                    <div style="text-align: center;">
+                        <div style="font-size: 2rem;">🍽️</div>
+                        <div style="font-weight: bold;">{item[1]}</div>
                     </div>
-                    ''', unsafe_allow_html=True)
+                </div>
+                ''', unsafe_allow_html=True)
             
             with col2:
                 st.subheader(f"🍽️ {item[1]}")
@@ -934,7 +629,7 @@ def show_menu_selection():
                 with col_a:
                     quantity = st.number_input("Qty", min_value=0, max_value=10, key=f"qty_{item[0]}")
                 with col_b:
-                    instructions = st.text_input("Special requests", key=f"inst_{item[0]}", placeholder="e.g., no onions, extra sauce")
+                    instructions = st.text_input("Special requests", key=f"inst_{item[0]}", placeholder="e.g., no onions")
                 with col_c:
                     if quantity > 0:
                         if st.button("**+ Add**", key=f"add_{item[0]}"):
@@ -1121,14 +816,11 @@ def display_order_tracking(order_token):
         if current_status is None:
             st.error("❌ Order not found. Please check your Order Token.")
             
-            # Show debugging information
-            st.info("💡 Debug Information:")
-            
-            # Check recent orders to help debug
+            # Show recent orders for debugging
             try:
                 recent_orders = db.get_recent_orders(5)
                 if recent_orders:
-                    st.write("Recent orders in system:")
+                    st.info("🔍 Recent orders in system:")
                     for order in recent_orders:
                         st.write(f"- Order #{order[0]}: {order[2]} (Token: {order[9]})")
                 else:
@@ -1176,22 +868,22 @@ def display_order_tracking(order_token):
         st.subheader("📋 Order Details")
         col1, col2 = st.columns(2)
         with col1:
-            st.write(f"**📄 Order ID:** {order[0]}")
-            st.write(f"**👤 Customer:** {order[2]}")
-            st.write(f"**🎯 Order Type:** {str(order[3]).title()}")
-            st.write(f"**💳 Payment:** {str(order[10]).title()}")
+            st.write(f"**📄 Order ID:** {order['id']}")
+            st.write(f"**👤 Customer:** {order['customer_name']}")
+            st.write(f"**🎯 Order Type:** {order['order_type'].title()}")
+            st.write(f"**💳 Payment:** {order['payment_method'].title()}")
         with col2:
-            st.write(f"**💰 Total:** R {order[5]}")
-            st.write(f"**📅 Order Date:** {order[6]}")
-            st.write(f"**📦 Items Ordered:** {order[12] if len(order) > 12 else 'N/A'}")
-            if order[7]:  # notes
-                st.write(f"**📝 Notes:** {order[7]}")
+            st.write(f"**💰 Total:** R {order['total_amount']}")
+            st.write(f"**📅 Order Date:** {order['order_date']}")
+            st.write(f"**📦 Items Ordered:** {order['item_count']}")
+            if order['notes']:
+                st.write(f"**📝 Notes:** {order['notes']}")
         
         # Enhanced Real-time Progress Tracker
         st.subheader("🔄 Order Progress")
         
         # Define status flow based on order type
-        if str(order[3]) == 'takeaway':
+        if order['order_type'] == 'takeaway':
             status_flow = ['pending', 'preparing', 'ready', 'collected']
             status_names = ['Order Received', 'Preparing', 'Ready for Collection', 'Collected']
         else:
@@ -1249,22 +941,21 @@ def display_order_tracking(order_token):
         
         # Order items with detailed information
         st.subheader("🍽️ Your Order Items")
-        if order[11] and isinstance(order[11], str):
-            items = order[11].split(',')
+        if order['items']:
+            items = order['items'].split(',')
             for item in items:
                 st.write(f"• {item.strip()}")
         else:
             st.write("No items found in this order")
         
         # Special collection button for takeaway
-        order_type = str(order[3]) if order[3] else 'dine-in'
-        if order_type == 'takeaway' and current_status == 'ready':
+        if order['order_type'] == 'takeaway' and current_status == 'ready':
             st.success("🎯 **Your order is ready for collection!**")
             st.info("📍 Please come to the counter to collect your order")
             
             if st.button("📦 **I've Collected My Order**", type="primary", key="collect_btn"):
                 try:
-                    db.update_order_status(order[0], 'collected', 'Customer collected order')
+                    db.update_order_status(order['id'], 'collected', 'Customer collected order')
                     st.success("🎉 Thank you! Order marked as collected. Enjoy your meal! 🍽️")
                     time.sleep(2)
                     st.rerun()
@@ -1289,606 +980,10 @@ def display_order_tracking(order_token):
         st.error(f"❌ Error tracking order: {e}")
         st.info("🤝 If this problem persists, please contact our staff for assistance.")
 
-# Enhanced Analytics Dashboard with Real Data
-def premium_analytics_dashboard():
-    st.title("📊 Premium Analytics Dashboard")
-    st.markdown("### 🚀 Advanced Business Intelligence & Insights")
-    
-    # Time period selector with enhanced options
-    st.sidebar.markdown("### 📈 Analytics Settings")
-    days = st.sidebar.selectbox("Time Period", [7, 30, 90, 365], index=1, key="analytics_days")
-    
-    # Get analytics data
-    analytics_data = db.get_real_analytics(days)
-    
-    if not analytics_data:
-        st.warning("📊 **No data available yet** - Analytics will populate as orders are processed")
-        st.info("💡 Place some test orders to see analytics in action!")
-        return
-    
-    totals = analytics_data['totals']
-    daily_trend = analytics_data['daily_trend']
-    hourly_data = analytics_data['hourly_data']
-    popular_dishes = analytics_data['popular_dishes']
-    category_distribution = analytics_data['category_distribution']
-    payment_distribution = analytics_data['payment_distribution']
-    order_type_distribution = analytics_data['order_type_distribution']
-    
-    # Enhanced KPI Metrics
-    st.subheader("🎯 Key Performance Indicators")
-    
-    kpi_cols = st.columns(4)
-    
-    with kpi_cols[0]:
-        total_orders = totals[0] if totals else 0
-        st.metric("📦 Total Orders", f"{total_orders:,}")
-    
-    with kpi_cols[1]:
-        total_revenue = totals[1] if totals else 0
-        st.metric("💰 Total Revenue", f"R {total_revenue:,.0f}")
-    
-    with kpi_cols[2]:
-        avg_order_value = totals[2] if totals else 0
-        st.metric("📊 Average Order", f"R {avg_order_value:.0f}")
-    
-    with kpi_cols[3]:
-        if popular_dishes:
-            most_popular = popular_dishes[0][0] if popular_dishes else "No data"
-            st.metric("🏆 Best Seller", most_popular)
-        else:
-            st.metric("🏆 Best Seller", "No data")
-    
-    # Revenue Trend Line Chart
-    if daily_trend:
-        st.subheader("📈 Daily Revenue Trend")
-        daily_df = pd.DataFrame(daily_trend, columns=['date', 'orders', 'revenue'])
-        daily_df['date'] = pd.to_datetime(daily_df['date'])
-        
-        fig_trend = px.line(
-            daily_df, 
-            x='date', 
-            y='revenue',
-            title='Daily Revenue Trend',
-            labels={'revenue': 'Revenue (R)', 'date': 'Date'}
-        )
-        fig_trend.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig_trend, use_container_width=True)
-    
-    # Category Distribution Pie Chart
-    if category_distribution:
-        st.subheader("🥧 Menu Category Distribution")
-        category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'revenue', 'orders'])
-        
-        fig_pie = px.pie(
-            category_df,
-            values='revenue',
-            names='category',
-            title='Revenue Distribution by Category',
-            color_discrete_sequence=px.colors.qualitative.Pastel
-        )
-        fig_pie.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-        )
-        st.plotly_chart(fig_pie, use_container_width=True)
-    
-    # Popular Dishes Bar Chart
-    if popular_dishes:
-        st.subheader("🍽️ Top 10 Popular Dishes")
-        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
-        dishes_df = dishes_df.head(10)
-        
-        fig_dishes = px.bar(
-            dishes_df,
-            x='dish',
-            y='quantity',
-            title='Most Popular Dishes by Quantity Sold',
-            labels={'quantity': 'Quantity Sold', 'dish': 'Dish Name'},
-            color='quantity',
-            color_continuous_scale='Viridis'
-        )
-        fig_dishes.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            xaxis_tickangle=-45
-        )
-        st.plotly_chart(fig_dishes, use_container_width=True)
-    
-    # Payment Method Distribution
-    if payment_distribution:
-        st.subheader("💳 Payment Method Distribution")
-        payment_df = pd.DataFrame(payment_distribution, columns=['method', 'orders', 'revenue'])
-        
-        fig_payment = px.pie(
-            payment_df,
-            values='orders',
-            names='method',
-            title='Orders by Payment Method',
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig_payment.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-        )
-        st.plotly_chart(fig_payment, use_container_width=True)
-    
-    # Business Insights based on real data
-    st.markdown("---")
-    st.subheader("💡 Real Data Business Insights")
-    
-    insight_cols = st.columns(2)
-    
-    with insight_cols[0]:
-        # Peak hours analysis
-        if hourly_data:
-            hourly_df = pd.DataFrame(hourly_data, columns=['hour', 'orders', 'revenue'])
-            peak_hour = hourly_df.loc[hourly_df['orders'].idxmax()]
-            st.info(f"""
-            **📊 Peak Performance Hours**
-            - Busiest Hour: {peak_hour['hour']}:00 ({peak_hour['orders']} orders)
-            - Peak Revenue: R {peak_hour['revenue']:,.0f}
-            - **Recommendation:** Extra staff during {peak_hour['hour']}:00
-            """)
-    
-    with insight_cols[1]:
-        # Category insights
-        if category_distribution:
-            category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'revenue', 'orders'])
-            best_category = category_df.loc[category_df['revenue'].idxmax()]
-            st.success(f"""
-            **🎯 Revenue Leader**
-            - Top Category: {best_category['category']}
-            - Revenue: R {best_category['revenue']:,.0f}
-            - Items Sold: {best_category['quantity']}
-            - **Focus:** Promote {best_category['category']} items
-            """)
-    
-    # Additional insights
-    st.subheader("📈 Performance Metrics")
-    
-    perf_cols = st.columns(3)
-    
-    with perf_cols[0]:
-        if popular_dishes:
-            dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
-            avg_items_per_order = dishes_df['quantity'].sum() / totals[0] if totals[0] > 0 else 0
-            st.metric("🛒 Avg Items/Order", f"{avg_items_per_order:.1f}")
-    
-    with perf_cols[1]:
-        if payment_distribution:
-            payment_df = pd.DataFrame(payment_distribution, columns=['method', 'orders', 'revenue'])
-            card_percentage = (payment_df[payment_df['method'] == 'card']['orders'].iloc[0] / totals[0] * 100) if totals[0] > 0 else 0
-            st.metric("💳 Card Usage", f"{card_percentage:.1f}%")
-    
-    with perf_cols[2]:
-        if order_type_distribution:
-            order_type_df = pd.DataFrame(order_type_distribution, columns=['type', 'orders', 'revenue'])
-            dine_in_percentage = (order_type_df[order_type_df['type'] == 'dine-in']['orders'].iloc[0] / totals[0] * 100) if totals[0] > 0 else 0
-            st.metric("🏠 Dine-in Rate", f"{dine_in_percentage:.1f}%")
-
-# Premium Kitchen Dashboard
-def premium_kitchen_dashboard():
-    st.title("👨‍🍳 Premium Kitchen Dashboard")
-    st.markdown("### 🚀 Real-time Order Management System")
-    
-    # Auto-refresh control
-    col1, col2, col3 = st.columns([2, 1, 1])
-    with col1:
-        st.info("🔄 **Live Updates Active** - Real-time order synchronization")
-    with col2:
-        auto_refresh = st.checkbox("Auto Refresh", value=True, key="auto_refresh")
-    with col3:
-        refresh_rate = st.selectbox("Refresh Rate", [2, 5, 10], index=0, key="refresh_rate")
-    
-    # Auto-refresh logic
-    if auto_refresh and (time.time() - st.session_state.last_order_check > refresh_rate):
-        st.session_state.last_order_check = time.time()
-        st.rerun()
-    
-    # Real-time stats
-    st.subheader("📊 Live Kitchen Metrics")
-    
-    try:
-        pending_orders = len(db.get_all_orders('pending'))
-        preparing_orders = len(db.get_all_orders('preparing'))
-        ready_orders = len(db.get_all_orders('ready'))
-        today_orders = db.get_todays_orders_count()
-    except:
-        pending_orders = preparing_orders = ready_orders = today_orders = 0
-    
-    metrics_cols = st.columns(4)
-    
-    with metrics_cols[0]:
-        st.metric("⏳ Pending", pending_orders)
-    with metrics_cols[1]:
-        st.metric("👨‍🍳 Preparing", preparing_orders)
-    with metrics_cols[2]:
-        st.metric("✅ Ready", ready_orders)
-    with metrics_cols[3]:
-        st.metric("📊 Today Total", today_orders)
-    
-    # Kitchen Priority System
-    st.markdown("---")
-    st.subheader("🎯 Priority Order Management")
-    
-    # Get active orders
-    try:
-        orders = db.get_active_orders()
-    except:
-        orders = []
-    
-    if not orders:
-        st.info("🎉 **No active orders** - Kitchen is clear! New orders will appear here automatically.")
-        return
-    
-    # Create tabs for different order statuses
-    tab1, tab2, tab3 = st.tabs([f"⏳ Pending ({pending_orders})", 
-                               f"👨‍🍳 Preparing ({preparing_orders})", 
-                               f"✅ Ready ({ready_orders})"])
-    
-    with tab1:
-        display_orders_by_status(orders, 'pending', "📋 New Orders - Action Required")
-    
-    with tab2:
-        display_orders_by_status(orders, 'preparing', "🔥 Orders in Progress")
-    
-    with tab3:
-        display_orders_by_status(orders, 'ready', "🎯 Ready for Service")
-
-def display_orders_by_status(orders, status, title):
-    """Display orders filtered by status with enhanced UI"""
-    filtered_orders = [order for order in orders if str(order[4]) == status]
-    
-    if not filtered_orders:
-        st.info(f"📭 No orders with status '{status}'")
-        return
-    
-    st.subheader(title)
-    
-    for order in filtered_orders:
-        order_id = order[0]
-        table_num = order[1] if order[1] else ""
-        customer_name = str(order[2]) if order[2] else "Unknown"
-        order_type = str(order[3]) if order[3] else "dine-in"
-        current_status = str(order[4]) if order[4] else "pending"
-        total_amount = order[5] if order[5] else 0
-        order_time = order[6] if order[6] else "Unknown"
-        items = order[8] if len(order) > 8 and order[8] else "No items"
-        item_count = order[11] if len(order) > 11 else 0
-        payment_method = order[10] if len(order) > 10 and order[10] else "cash"
-        notes = order[7] if len(order) > 7 and order[7] else ""
-        
-        # Enhanced status configuration
-        status_config = {
-            'pending': {'emoji': '⏳', 'color': '#FF6B35', 'priority': 'High'},
-            'preparing': {'emoji': '👨‍🍳', 'color': '#1E90FF', 'priority': 'Medium'}, 
-            'ready': {'emoji': '✅', 'color': '#32CD32', 'priority': 'Low'},
-        }
-        
-        status_info = status_config.get(current_status, status_config['pending'])
-        
-        # Create order card with enhanced UI
-        with st.container():
-            st.markdown(f"""
-            <div style="border: 2px solid {status_info['color']}; border-radius: 15px; padding: 1.5rem; margin: 1rem 0; background: var(--background-color);">
-                <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 1rem;">
-                    <h3 style="margin: 0; color: {status_info['color']};">
-                        {status_info['emoji']} Order #{order_id} - {customer_name}
-                    </h3>
-                    <div style="background: {status_info['color']}; color: white; padding: 0.3rem 0.8rem; border-radius: 20px; font-size: 0.8rem;">
-                        {status_info['priority']} Priority
-                    </div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            col1, col2 = st.columns([3, 2])
-            
-            with col1:
-                # Order details
-                st.write(f"**👤 Customer:** {customer_name}")
-                st.write(f"**🎯 Type:** {order_type.title()}")
-                st.write(f"**💳 Payment:** {payment_method.title()}")
-                if order_type == 'dine-in' and table_num:
-                    st.write(f"**🪑 Table:** {table_num}")
-                st.write(f"**🕒 Order Time:** {order_time} SAST")
-                st.write(f"**📦 Items ({item_count}):** {items}")
-                if notes:
-                    st.write(f"**📝 Notes:** {notes}")
-                st.write(f"**💰 Total:** **R {total_amount}**")
-            
-            with col2:
-                # Enhanced status management
-                st.write("### 🔄 Status Management")
-                
-                # Quick action buttons
-                col_a, col_b, col_c = st.columns(3)
-                
-                with col_a:
-                    if current_status != 'preparing' and st.button("Start Prep", key=f"start_{order_id}"):
-                        db.update_order_status(order_id, 'preparing', 'Kitchen started preparation')
-                        st.success("✅ Order preparation started!")
-                        time.sleep(1)
-                        st.rerun()
-                
-                with col_b:
-                    if current_status != 'ready' and st.button("Mark Ready", key=f"ready_{order_id}"):
-                        db.update_order_status(order_id, 'ready', 'Order ready for service')
-                        st.success("🎉 Order marked as ready!")
-                        time.sleep(1)
-                        st.rerun()
-                
-                with col_c:
-                    if current_status != 'completed' and st.button("Complete", key=f"complete_{order_id}"):
-                        db.update_order_status(order_id, 'completed', 'Order completed by kitchen')
-                        st.success("✅ Order completed!")
-                        time.sleep(1)
-                        st.rerun()
-                
-                # Advanced status selector
-                st.write("**Advanced Status Control:**")
-                status_options = ['pending', 'preparing', 'ready', 'completed', 'collected']
-                current_index = status_options.index(current_status) if current_status in status_options else 0
-                
-                new_status = st.selectbox(
-                    "Select status:",
-                    status_options,
-                    index=current_index,
-                    key=f"adv_status_{order_id}"
-                )
-                
-                if st.button("🔄 Update Status", key=f"update_adv_{order_id}", 
-                           type="primary" if new_status != current_status else "secondary"):
-                    try:
-                        success = db.update_order_status(order_id, new_status, f"Status updated via kitchen dashboard")
-                        if success:
-                            st.success(f"✅ Order #{order_id} updated to {new_status}!")
-                            time.sleep(1)
-                            st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error: {str(e)}")
-            
-            st.markdown("---")
-
-# Enhanced QR Code Management
-def premium_qr_management():
-    st.title("📱 Premium QR Code Management")
-    
-    st.markdown("""
-    ### 🚀 Smart QR Code System
-    
-    Generate and manage QR codes for seamless customer ordering experience.
-    """)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🎯 QR Code Generator")
-        
-        # Use the actual app URL
-        qr_url = st.text_input("Ordering URL", "https://myfood.streamlit.app/", key="qr_url")
-        qr_size = st.slider("QR Code Size", 200, 500, 300, key="qr_size")
-        
-        # Generate QR code
-        if st.button("🔄 Generate QR Code", type="primary"):
-            qr_img = generate_qr_code(qr_url)
-            st.image(f"data:image/png;base64,{qr_img}", width=qr_size)
-            st.success("✅ QR Code generated successfully!")
-            
-            # Download section
-            st.markdown("---")
-            st.subheader("📥 Download Options")
-            st.markdown(get_qr_download_link(qr_img), unsafe_allow_html=True)
-    
-    with col2:
-        st.subheader("📊 QR Code Analytics")
-        
-        # Simulated analytics
-        st.metric("🔄 Total Scans", "1,247", "+128 this week")
-        st.metric("📱 Mobile Orders", "893", "71.5% of total")
-        st.metric("⏰ Peak Scan Time", "19:30", "Dinner rush")
-        
-        st.info("""
-        **💡 Placement Tips:**
-        - Tables: 85% conversion rate
-        - Entrance: 62% conversion rate  
-        - Counter: 45% conversion rate
-        - Menus: 78% conversion rate
-        """)
-
-# Premium Staff Navigation
-def premium_staff_navigation():
-    st.sidebar.title("👨‍💼 Premium Staff Portal")
-    
-    # User info with enhanced display
-    if st.session_state.user:
-        user_role = st.session_state.user[3]
-        st.sidebar.markdown(f"""
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                    color: white; padding: 1rem; border-radius: 10px; margin: 1rem 0;">
-            <h4 style="margin: 0; color: white;">Welcome, {st.session_state.user[1]}!</h4>
-            <p style="margin: 0; opacity: 0.9;">Role: {user_role.title()}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Enhanced navigation
-    st.sidebar.markdown("---")
-    page = st.sidebar.radio("**Navigation Menu**", 
-                          ["👨‍🍳 Kitchen Dashboard", "📊 Analytics", "📱 QR Codes"])
-    
-    # Quick actions
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🚀 Quick Actions")
-    
-    if st.sidebar.button("🔄 Refresh All Data", use_container_width=True):
-        st.rerun()
-    
-    # Logout
-    st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", type="primary", use_container_width=True):
-        logout()
-    
-    # Page routing
-    if page == "👨‍🍳 Kitchen Dashboard":
-        premium_kitchen_dashboard()
-    elif page == "📊 Analytics":
-        premium_analytics_dashboard()
-    elif page == "📱 QR Codes":
-        premium_qr_management()
-
-# Enhanced Landing Page
-def show_landing_page():
-    st.markdown("""
-    <style>
-    .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 4rem 2rem;
-        border-radius: 20px;
-        color: white;
-        text-align: center;
-        margin-bottom: 3rem;
-    }
-    .feature-card {
-        background: var(--background-color);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        margin: 1rem;
-        border-left: 5px solid #667eea;
-        transition: transform 0.3s ease;
-        color: var(--text-color);
-    }
-    .feature-card:hover {
-        transform: translateY(-5px);
-    }
-    .step-card {
-        background: var(--background-color);
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        margin: 0.5rem;
-        color: var(--text-color);
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    # Hero Section
-    st.markdown("""
-    <div class="hero-section">
-        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste Restaurant</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Delicious Food & Great Service</p>
-        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                🍕 Fresh Ingredients
-            </div>
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                👨‍🍳 Expert Chefs
-            </div>
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                ⚡ Quick Service
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Call to Action
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.markdown("""
-        ## 🎯 Experience Great Taste
-        
-        Delicious food and drinks with quick service and affordable prices.
-        
-        **🌟 Quality Ingredients** - Fresh and locally sourced  
-        **⚡ Lightning Fast** - Average 15-minute preparation  
-        **📱 Live Tracking** - Watch your order in real-time  
-        **💖 Customer First** - Your satisfaction is our priority
-        """)
-        
-        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True):
-            st.session_state.current_step = "order_type"
-            st.session_state.current_page = "order"
-            st.rerun()
-    
-    with col2:
-        try:
-            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
-                    use_container_width=True, caption="Our Beautiful Restaurant")
-        except:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                        height: 200px; display: flex; align-items: center; justify-content: center;">
-                <h3>🏛️ Our Restaurant</h3>
-            </div>
-            """, unsafe_allow_html=True)
-    
-    # Features Grid
-    st.markdown("---")
-    st.subheader("🌟 What Makes Us Special")
-    
-    features = st.columns(3)
-    
-    with features[0]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">🍽️</div>
-            <h3 style="color: var(--text-color);">Great Taste</h3>
-            <p style="color: var(--text-color);">Delicious recipes with quality ingredients and authentic flavors</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with features[1]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">⚡</div>
-            <h3 style="color: var(--text-color);">Lightning Fast</h3>
-            <p style="color: var(--text-color);">Average preparation time of just 15 minutes. Your hunger won't wait!</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with features[2]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">📱</div>
-            <h3 style="color: var(--text-color);">Live Tracking</h3>
-            <p style="color: var(--text-color);">Watch your order being prepared in real-time. No more guessing!</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # How It Works
-    st.markdown("---")
-    st.subheader("🚀 How It Works")
-    
-    steps = st.columns(4)
-    
-    step_data = [
-        {"icon": "📱", "title": "Scan & Order", "desc": "Use your phone to browse our menu"},
-        {"icon": "🛒", "title": "Add Items", "desc": "Select your favorite dishes"},
-        {"icon": "👨‍🍳", "title": "We Prepare", "desc": "Our chefs cook with passion"},
-        {"icon": "🎯", "title": "Enjoy", "desc": "Collect and savor every bite"}
-    ]
-    
-    for idx, step in enumerate(steps):
-        with step:
-            data = step_data[idx]
-            st.markdown(f"""
-            <div class="step-card">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">{data['icon']}</div>
-                <h4 style="color: var(--text-color);">{data['title']}</h4>
-                <p style="font-size: 0.9rem; color: var(--text-color);">{data['desc']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-# Main app with premium features
+# Main app
 def main():
     st.set_page_config(
-        page_title="Taste Restaurant - Premium",
+        page_title="Taste Restaurant",
         page_icon="🍽️",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -1897,35 +992,41 @@ def main():
     # Initialize session state
     init_session_state()
     
-    # Premium CSS for dark/light mode compatibility
-    st.markdown("""
-    <style>
-    .main-header {
-        font-size: 3rem;
-        text-align: center;
-        color: var(--text-color);
-        margin-bottom: 2rem;
-    }
-    
-    /* Dark mode compatibility */
-    .feature-card, .step-card {
-        background: var(--background-color);
-        color: var(--text-color);
-    }
-    
-    /* Ensure text visibility in all modes */
-    .st-bw, .st-d4, .st-d5, .st-d6, .st-d7, .st-d8, .st-d9, .st-da, .st-db, .st-dc {
-        color: var(--text-color) !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
     # Main navigation - Customer vs Staff
     if st.session_state.logged_in:
-        # Premium staff interface
-        premium_staff_navigation()
+        # Staff interface
+        st.sidebar.title("👨‍💼 Staff Portal")
+        st.sidebar.markdown(f"Welcome, {st.session_state.user[1]}!")
+        
+        page = st.sidebar.radio("Navigation", ["👨‍🍳 Kitchen", "📊 Analytics"])
+        
+        if page == "👨‍🍳 Kitchen":
+            st.title("👨‍🍳 Kitchen Dashboard")
+            # Simple kitchen view
+            orders = db.get_active_orders()
+            if orders:
+                for order in orders:
+                    with st.expander(f"Order #{order[0]} - {order[2]} ({order[4]})"):
+                        st.write(f"Items: {order[8]}")
+                        st.write(f"Table: {order[1]}")
+                        if st.button(f"Mark as Preparing", key=f"prep_{order[0]}"):
+                            db.update_order_status(order[0], 'preparing')
+                            st.rerun()
+                        if st.button(f"Mark as Ready", key=f"ready_{order[0]}"):
+                            db.update_order_status(order[0], 'ready')
+                            st.rerun()
+            else:
+                st.info("No active orders")
+                
+        elif page == "📊 Analytics":
+            st.title("📊 Analytics")
+            st.info("Analytics dashboard would go here")
+            
+        if st.sidebar.button("Logout"):
+            logout()
+            
     else:
-        # Customer interface remains the same
+        # Customer interface
         st.sidebar.title("🍽️ Taste Restaurant")
         st.sidebar.markdown("---")
         
@@ -1941,7 +1042,12 @@ def main():
         
         # Main content area
         if app_mode == "🏠 Home":
-            show_landing_page()
+            st.title("🍽️ Welcome to Taste Restaurant")
+            st.write("Delicious food and great service!")
+            if st.button("Start Your Order"):
+                st.session_state.current_step = "order_type"
+                st.rerun()
+                
         elif app_mode == "🍕 Place Order":
             customer_ordering()
         elif app_mode == "📱 Track Order":
