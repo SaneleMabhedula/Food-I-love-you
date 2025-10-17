@@ -131,39 +131,39 @@ class RestaurantDB:
         except sqlite3.IntegrityError:
             pass
         
-        # Clear existing menu items and insert new South African menu
+        # Clear existing menu items and insert new menu with reliable images
         cursor.execute('DELETE FROM menu_items')
         
-        # FIXED: Using simple, reliable image URLs that work in Streamlit
-        south_african_menu = [
-            # STARTERS
-            ('Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3&w=400'),
-            ('Chakalaka & Pap', 'Spicy vegetable relish with maize meal', 45, 'Starter', 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?ixlib=rb-4.0.3&w=400'),
-            ('Samoosas', 'Triangular pastry with spiced filling', 35, 'Starter', 'https://images.unsplash.com/photo-1603100055781-cab7adf375b1?ixlib=rb-4.0.3&w=400'),
-
-            # MAIN COURSES
-            ('Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3&w=400'),
-            ('Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3&w=400'),
-            ('Bunny Chow', 'Hollowed bread filled with curry of your choice', 75, 'Main Course', 'https://images.unsplash.com/photo-1565299588453-b8ec840b7c7e?ixlib=rb-4.0.3&w=400'),
-            ('Pap & Wors', 'Maize meal porridge with boerewors', 65, 'Main Course', 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?ixlib=rb-4.0.3&w=400'),
-            ('Potjiekos', 'Traditional slow-cooked stew in cast iron pot', 125, 'Main Course', 'https://images.unsplash.com/photo-1551024506-0bccd828d307?ixlib=rb-4.0.3&w=400'),
-            ('Samp & Beans', 'Traditional maize and sugar bean dish', 55, 'Main Course', 'https://images.unsplash.com/photo-1512058564366-18510be2db19?ixlib=rb-4.0.3&w=400'),
-            ('Boerewors Roll', 'Traditional sausage in fresh roll with chakalaka', 45, 'Main Course', 'https://images.unsplash.com/photo-1550317138-10000687a72b?ixlib=rb-4.0.3&w=400'),
-            ('Vetkoek with Mince', 'Fried dough bread filled with savoury mince', 50, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3&w=400'),
-
-            # DESSERTS
-            ('Melktert', 'Traditional milk tart with cinnamon', 35, 'Dessert', 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?ixlib=rb-4.0.3&w=400'),
-            ('Koeksisters', 'Sweet syrupy plaited doughnuts', 25, 'Dessert', 'https://images.unsplash.com/photo-1555507036-ab794f27d2e9?ixlib=rb-4.0.3&w=400'),
-            ('Malva Pudding', 'Sweet apricot pudding with custard', 40, 'Dessert', 'https://images.unsplash.com/photo-1565958011703-44f9829ba187?ixlib=rb-4.0.3&w=400'),
-
+        # SIMPLIFIED MENU WITH RELIABLE IMAGES
+        menu_items = [
             # BEVERAGES
-            ('Rooibos Tea', 'Traditional South African herbal tea', 20, 'Beverage', 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?ixlib=rb-4.0.3&w=400'),
-            ('Amarula Cream', 'Cream liqueur with marula fruit', 35, 'Beverage', 'https://images.unsplash.com/photo-1470337458703-46ad1756a187?ixlib=rb-4.0.3&w=400'),
-            ('Coke/Fanta/Sprite', 'Cold soft drinks', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3&w=400'),
-            ('Still Water', '500ml bottled water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3&w=400')
+            ('Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
+            ('Coca-Cola', 'Ice cold Coca-Cola', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3'),
+            ('Orange Juice', 'Freshly squeezed orange juice', 22, 'Beverage', 'https://images.unsplash.com/photo-1613478223719-2ab802602423?ixlib=rb-4.0.3'),
+            ('Bottled Water', '500ml still water', 15, 'Beverage', 'https://images.unsplash.com/photo-1548839149-851a5d7d3f6a?ixlib=rb-4.0.3'),
+            
+            # BURGERS
+            ('Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
+            ('Chicken Burger', 'Grilled chicken breast with mayo and lettuce', 55, 'Main Course', 'https://images.unsplash.com/photo-1606755962773-d324e74534a2?ixlib=rb-4.0.3'),
+            ('Cheese Burger', 'Double beef patty with extra cheese', 75, 'Main Course', 'https://images.unsplash.com/photo-1607013251379-e6eecfffe234?ixlib=rb-4.0.3'),
+            
+            # GRILLED ITEMS
+            ('Grilled Chicken', 'Tender grilled chicken breast with herbs', 85, 'Main Course', 'https://images.unsplash.com/photo-1532550907401-a500c9a57435?ixlib=rb-4.0.3'),
+            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'https://images.unsplash.com/photo-1607116667981-0d2b54b5b0ee?ixlib=rb-4.0.3'),
+            ('Grilled Fish', 'Fresh fish with lemon butter sauce', 95, 'Main Course', 'https://images.unsplash.com/photo-1598514982191-4333db1a6afc?ixlib=rb-4.0.3'),
+            
+            # DESSERTS
+            ('Chocolate Cake', 'Rich chocolate cake with ganache', 35, 'Dessert', 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?ixlib=rb-4.0.3'),
+            ('Ice Cream', 'Vanilla ice cream with chocolate sauce', 25, 'Dessert', 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?ixlib=rb-4.0.3'),
+            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'https://images.unsplash.com/photo-1535920527002-b35e96722206?ixlib=rb-4.0.3'),
+            
+            # SIDES
+            ('French Fries', 'Crispy golden fries', 25, 'Starter', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?ixlib=rb-4.0.3'),
+            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'https://images.unsplash.com/photo-1634313354623-e1978d6d3a9f?ixlib=rb-4.0.3'),
+            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'https://images.unsplash.com/photo-1573140247632-f8fd74997d5c?ixlib=rb-4.0.3')
         ]
         
-        for item in south_african_menu:
+        for item in menu_items:
             cursor.execute('''
                 INSERT INTO menu_items (name, description, price, category, image_url)
                 VALUES (?, ?, ?, ?, ?)
@@ -555,7 +555,7 @@ def customer_ordering():
     </style>
     """, unsafe_allow_html=True)
     
-    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Authentic South African cuisine at great prices</p></div>', unsafe_allow_html=True)
+    st.markdown('<div class="order-header"><h1>🍽️ Place Your Order</h1><p>Delicious food and drinks at great prices</p></div>', unsafe_allow_html=True)
     
     # Initialize session state
     init_session_state()
@@ -586,7 +586,6 @@ def show_order_type_selection():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # FIXED: Simple image URL
         try:
             st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
                     use_container_width=True, caption="Dine In Experience")
@@ -605,7 +604,6 @@ def show_order_type_selection():
         st.caption("Enjoy our cozy atmosphere")
     
     with col2:
-        # FIXED: Simple image URL
         try:
             st.image("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3", 
                     use_container_width=True, caption="Takeaway Experience")
@@ -624,7 +622,6 @@ def show_order_type_selection():
         st.caption("Pick up and enjoy elsewhere")
     
     with col3:
-        # FIXED: Simple image URL
         try:
             st.image("https://images.unsplash.com/photo-1504674900247-0877df9cc836?ixlib=rb-4.0.3", 
                     use_container_width=True, caption="Delivery Experience")
@@ -722,10 +719,10 @@ def show_menu_selection():
     </style>
     """, unsafe_allow_html=True)
     
-    st.subheader("📋 Explore Our South African Menu")
+    st.subheader("📋 Explore Our Menu")
     
     # Menu categories
-    categories = ['All', 'Starter', 'Main Course', 'Dessert', 'Beverage']
+    categories = ['All', 'Beverage', 'Main Course', 'Dessert', 'Starter']
     selected_category = st.selectbox("**Filter by Category**", categories, key="category_filter")
     
     # Get menu items
@@ -734,9 +731,9 @@ def show_menu_selection():
     except:
         # Fallback if database error - use new menu items
         menu_items = [
-            (1, 'Biltong Platter', 'Traditional dried cured meat with droewors', 65, 'Starter', 1, 'https://images.unsplash.com/photo-1546833999-b9f581a1996d?ixlib=rb-4.0.3'),
-            (2, 'Braai Platter for 2', 'Mixed grill with boerewors, lamb chops, chicken', 195, 'Main Course', 1, 'https://images.unsplash.com/photo-1555939597-9c0a8be1e74e?ixlib=rb-4.0.3'),
-            (3, 'Bobotie with Rice', 'Spiced minced meat baked with egg topping', 89, 'Main Course', 1, 'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?ixlib=rb-4.0.3')
+            (1, 'Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 1, 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
+            (2, 'Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 1, 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
+            (3, 'Chocolate Cake', 'Rich chocolate cake with ganache', 35, 'Dessert', 1, 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?ixlib=rb-4.0.3')
         ]
     
     # Display menu items
@@ -974,7 +971,7 @@ def display_order_tracking(order_token):
         if current_status in ['completed', 'collected']:
             st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
             st.balloons()
-            st.info("💫 We hope you enjoyed your South African culinary experience!")
+            st.info("💫 We hope you enjoyed your meal!")
             return
         
         if not current_status:
@@ -1175,14 +1172,14 @@ def show_landing_page():
     # Hero Section
     st.markdown("""
     <div class="hero-section">
-        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste of South Africa</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Authentic South African Cuisine Experience</p>
+        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste Restaurant</h1>
+        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Delicious Food & Great Service</p>
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                🍕 Fresh Local Ingredients
+                🍕 Fresh Ingredients
             </div>
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                👨‍🍳 Traditional Recipes
+                👨‍🍳 Expert Chefs
             </div>
             <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
                 ⚡ Quick Service
@@ -1195,11 +1192,11 @@ def show_landing_page():
     col1, col2 = st.columns([2, 1])
     with col1:
         st.markdown("""
-        ## 🎯 Experience True South African Taste
+        ## 🎯 Experience Great Taste
         
-        Authentic South African flavors with traditional recipes and affordable prices.
+        Delicious food and drinks with quick service and affordable prices.
         
-        **🌟 Traditional Recipes** - Passed down through generations  
+        **🌟 Quality Ingredients** - Fresh and locally sourced  
         **⚡ Lightning Fast** - Average 15-minute preparation  
         **📱 Live Tracking** - Watch your order in real-time  
         **💖 Customer First** - Your satisfaction is our priority
@@ -1211,7 +1208,6 @@ def show_landing_page():
             st.rerun()
     
     with col2:
-        # FIXED: Simple image with fallback
         try:
             st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
                     use_container_width=True, caption="Our Beautiful Restaurant")
@@ -1233,8 +1229,8 @@ def show_landing_page():
         st.markdown("""
         <div class="feature-card">
             <div style="font-size: 3rem;">🍽️</div>
-            <h3>Authentic Taste</h3>
-            <p>Traditional South African recipes with authentic flavors and ingredients</p>
+            <h3>Great Taste</h3>
+            <p>Delicious recipes with quality ingredients and authentic flavors</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1279,32 +1275,6 @@ def show_landing_page():
                 <p style="font-size: 0.9rem; color: #666;">{data['desc']}</p>
             </div>
             """, unsafe_allow_html=True)
-    
-    # Restaurant Gallery
-    st.markdown("---")
-    st.subheader("🏛️ Our Restaurant")
-    
-    gallery = st.columns(3)
-    # FIXED: Simple image URLs
-    gallery_images = [
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3",
-        "https://images.unsplash.com/photo-1559329007-40df8a9345d8?ixlib=rb-4.0.3", 
-        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.3"
-    ]
-    
-    captions = ["Elegant Dining Area", "Modern Kitchen", "Cozy Atmosphere"]
-    
-    for idx, col in enumerate(gallery):
-        with col:
-            try:
-                st.image(gallery_images[idx], use_container_width=True, caption=captions[idx])
-            except:
-                st.markdown(f"""
-                <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                            height: 150px; display: flex; align-items: center; justify-content: center;">
-                    <h4>{captions[idx]}</h4>
-                </div>
-                """, unsafe_allow_html=True)
 
 # Staff Dashboard with real-time updates
 def staff_dashboard():
@@ -1631,7 +1601,7 @@ def staff_navigation():
 # Main app with smart navigation
 def main():
     st.set_page_config(
-        page_title="Taste of South Africa",
+        page_title="Taste Restaurant",
         page_icon="🍽️",
         layout="wide",
         initial_sidebar_state="expanded"
@@ -1665,7 +1635,7 @@ def main():
             st.sidebar.empty()
             
             # Simple mobile navigation
-            st.markdown('<h2 class="main-header">🍽️ Taste of South Africa</h2>', unsafe_allow_html=True)
+            st.markdown('<h2 class="main-header">🍽️ Taste Restaurant</h2>', unsafe_allow_html=True)
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1694,7 +1664,7 @@ def main():
                 
         else:
             # DESKTOP INTERFACE - Full features
-            st.sidebar.title("🍽️ Taste of South Africa")
+            st.sidebar.title("🍽️ Taste Restaurant")
             st.sidebar.markdown("---")
             
             # Customer navigation
