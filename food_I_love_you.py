@@ -113,12 +113,12 @@ class RestaurantDB:
     def insert_default_data(self):
         cursor = self.conn.cursor()
         
-        # Insert default admin user
+        # Insert default admin user with new credentials
         try:
             cursor.execute('''
                 INSERT OR IGNORE INTO users (username, password, role) 
                 VALUES (?, ?, ?)
-            ''', ('admin', hashlib.sha256('admin123'.encode()).hexdigest(), 'admin'))
+            ''', ('food2025', hashlib.sha256('food@2025'.encode()).hexdigest(), 'admin'))
         except sqlite3.IntegrityError:
             pass
         
@@ -460,27 +460,52 @@ class RestaurantDB:
         return True
     
     def get_order_by_token(self, order_token):
+        """Fixed function to properly retrieve order by token"""
         cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT o.*, 
-                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
-                   COUNT(oi.id) as item_count,
-                   o.notes as order_notes
-            FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
-            WHERE o.order_token = ?
-            GROUP BY o.id
-        ''', (order_token,))
-        result = cursor.fetchone()
-        
-        # Debug: Check what's being returned
-        if result:
-            st.write(f"Debug: Found order with token {order_token}")
-            st.write(f"Order data: {result}")
-        else:
-            st.write(f"Debug: No order found with token {order_token}")
+        try:
+            # First get the basic order info
+            cursor.execute('''
+                SELECT * FROM orders WHERE order_token = ?
+            ''', (order_token,))
+            order_data = cursor.fetchone()
             
-        return result
+            if not order_data:
+                return None
+            
+            # Then get the order items
+            cursor.execute('''
+                SELECT menu_item_name, quantity 
+                FROM order_items 
+                WHERE order_id = ?
+            ''', (order_data[0],))
+            items_data = cursor.fetchall()
+            
+            # Format items string
+            items_list = [f"{item[0]} (x{item[1]})" for item in items_data]
+            items_str = ", ".join(items_list)
+            
+            # Create a complete order tuple with all needed data
+            complete_order = (
+                order_data[0],  # id
+                order_data[1],  # table_number
+                order_data[2],  # customer_name
+                order_data[3],  # order_type
+                order_data[4],  # status
+                order_data[5],  # total_amount
+                order_data[6],  # order_date
+                order_data[7],  # notes
+                order_data[8],  # estimated_wait_time
+                order_data[9],  # order_token
+                order_data[10], # payment_method
+                items_str,      # items
+                len(items_data) # item_count
+            )
+            
+            return complete_order
+            
+        except Exception as e:
+            st.error(f"Error in get_order_by_token: {e}")
+            return None
     
     def get_order_status_history(self, order_id):
         cursor = self.conn.cursor()
@@ -1086,16 +1111,10 @@ def display_order_tracking(order_token):
         # Get current order status for live updates
         current_status = db.get_order_status(order_token)
         
-        # If order is collected/completed, show completion message and stop tracking
-        if current_status in ['completed', 'collected']:
-            st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
-            st.balloons()
-            st.info("💫 We hope you enjoyed your meal!")
-            return
-        
         if not current_status:
             st.error("❌ Order not found. Please check your Order Token.")
             st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            
             # Show recent orders for debugging
             try:
                 recent_orders = db.get_recent_orders(5)
@@ -1107,6 +1126,13 @@ def display_order_tracking(order_token):
                 pass
             return
         
+        # If order is collected/completed, show completion message and stop tracking
+        if current_status in ['completed', 'collected']:
+            st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
+            st.balloons()
+            st.info("💫 We hope you enjoyed your meal!")
+            return
+        
         # Update session state with current status for comparison
         previous_status = st.session_state.get('current_order_status')
         if current_status != previous_status:
@@ -1114,7 +1140,7 @@ def display_order_tracking(order_token):
             # Force a rerun when status changes
             st.rerun()
         
-        # Get full order details
+        # Get full order details using the fixed function
         order = db.get_order_by_token(order_token)
         
         if order:
@@ -1144,20 +1170,20 @@ def display_order_tracking(order_token):
             with col1:
                 st.write(f"**📄 Order ID:** {order[0]}")
                 st.write(f"**👤 Customer:** {order[2]}")
-                st.write(f"**🎯 Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
+                st.write(f"**🎯 Order Type:** {str(order[3]).title() if order[3] else 'N/A'}")
                 st.write(f"**💳 Payment:** {str(order[10]).title() if len(order) > 10 and order[10] else 'Cash'}")
             with col2:
-                st.write(f"**💰 Total:** R {order[6]}")
-                st.write(f"**📅 Order Date:** {order[7]} SAST")
+                st.write(f"**💰 Total:** R {order[5]}")
+                st.write(f"**📅 Order Date:** {order[6]} SAST")
                 st.write(f"**📦 Items Ordered:** {order[11] if len(order) > 11 else '0'}")
-                if len(order) > 9 and order[9]:
-                    st.write(f"**📝 Notes:** {order[9]}")
+                if len(order) > 7 and order[7]:
+                    st.write(f"**📝 Notes:** {order[7]}")
             
             # Enhanced Real-time Progress Tracker
             st.subheader("🔄 Order Progress")
             
             # Define status flow based on order type
-            if str(order[4]) == 'takeaway':
+            if str(order[3]) == 'takeaway':
                 status_flow = ['pending', 'preparing', 'ready', 'collected']
                 status_names = ['Order Received', 'Preparing', 'Ready for Collection', 'Collected']
             else:
@@ -1215,15 +1241,15 @@ def display_order_tracking(order_token):
             
             # Order items with detailed information
             st.subheader("🍽️ Your Order Items")
-            if order[8] and isinstance(order[8], str):
-                items = order[8].split(',')
+            if order[11] and isinstance(order[11], str):
+                items = order[11].split(',')
                 for item in items:
                     st.write(f"• {item.strip()}")
             else:
                 st.write("No items found in this order")
             
             # Special collection button for takeaway
-            order_type = str(order[4]) if order[4] else 'dine-in'
+            order_type = str(order[3]) if order[3] else 'dine-in'
             if order_type == 'takeaway' and current_status == 'ready':
                 st.success("🎯 **Your order is ready for collection!**")
                 st.info("📍 Please come to the counter to collect your order")
@@ -1513,7 +1539,7 @@ def premium_kitchen_dashboard():
 
 def display_orders_by_status(orders, status, title):
     """Display orders filtered by status with enhanced UI"""
-    filtered_orders = [order for order in orders if str(order[5]) == status]
+    filtered_orders = [order for order in orders if str(order[4]) == status]
     
     if not filtered_orders:
         st.info(f"📭 No orders with status '{status}'")
@@ -1525,14 +1551,14 @@ def display_orders_by_status(orders, status, title):
         order_id = order[0]
         table_num = order[1] if order[1] else ""
         customer_name = str(order[2]) if order[2] else "Unknown"
-        order_type = str(order[4]) if order[4] else "dine-in"
-        current_status = str(order[5]) if order[5] else "pending"
-        total_amount = order[6] if order[6] else 0
-        order_time = order[7] if order[7] else "Unknown"
+        order_type = str(order[3]) if order[3] else "dine-in"
+        current_status = str(order[4]) if order[4] else "pending"
+        total_amount = order[5] if order[5] else 0
+        order_time = order[6] if order[6] else "Unknown"
         items = order[8] if len(order) > 8 and order[8] else "No items"
         item_count = order[11] if len(order) > 11 else 0
         payment_method = order[10] if len(order) > 10 and order[10] else "cash"
-        notes = order[9] if len(order) > 9 and order[9] else ""
+        notes = order[7] if len(order) > 7 and order[7] else ""
         
         # Enhanced status configuration
         status_config = {
