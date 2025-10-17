@@ -546,8 +546,7 @@ class RestaurantDB:
 
 # Initialize database
 try:
-    #if os.path.exists("restaurant.db"):
-        #os.remove("restaurant.db")
+
     db = RestaurantDB()
 except Exception as e:
     st.error(f"Database initialization error: {e}")
