@@ -118,7 +118,7 @@ class RestaurantDB:
             cursor.execute('''
                 INSERT OR IGNORE INTO users (username, password, role) 
                 VALUES (?, ?, ?)
-            ''', ('food2025', hashlib.sha256('food@2025'.encode()).hexdigest(), 'admin'))
+            ''', ('admin', hashlib.sha256('admin123'.encode()).hexdigest(), 'admin'))
         except sqlite3.IntegrityError:
             pass
         
@@ -140,7 +140,7 @@ class RestaurantDB:
             ('Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
             ('Coca-Cola', 'Ice cold Coca-Cola', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3'),
             ('Orange Juice', 'Freshly squeezed orange juice', 22, 'Beverage', 'https://images.unsplash.com/photo-1613478223719-2ab802602423?ixlib=rb-4.0.3'),
-            ('Bottled Water', '500ml still water', 15, 'Beverage', 'bottled_water.jpeg'),  # Local image
+            ('Bottled Water', '500ml still water', 15, 'Beverage', 'bottled_water.jpg'),  # Local image
             
             # BURGERS
             ('Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
@@ -149,18 +149,18 @@ class RestaurantDB:
             
             # GRILLED ITEMS
             ('Grilled Chicken', 'Tender grilled chicken breast with herbs', 85, 'Main Course', 'https://images.unsplash.com/photo-1532550907401-a500c9a57435?ixlib=rb-4.0.3'),
-            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'beef_steak.jpeg'),  # Local image
+            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'beef_steak.jpg'),  # Local image
             ('Grilled Fish', 'Fresh fish with lemon butter sauce', 95, 'Main Course', 'grilled_fish.jpg'),  # Local image
             
             # DESSERTS
             ('Chocolate Cake', 'Rich chocolate cake with ganache', 35, 'Dessert', 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?ixlib=rb-4.0.3'),
             ('Ice Cream', 'Vanilla ice cream with chocolate sauce', 25, 'Dessert', 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?ixlib=rb-4.0.3'),
-            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'apple_pie.jpeg'),  # Local image
+            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'apple_pie.jpg'),  # Local image
             
             # SIDES
             ('French Fries', 'Crispy golden fries', 25, 'Starter', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?ixlib=rb-4.0.3'),
-            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'onion_rings.jpeg'),  # Local image
-            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'garlic_bread.jpeg')  # Local image
+            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'onion_rings.jpg'),  # Local image
+            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'garlic_bread.jpg')  # Local image
         ]
         
         for item in menu_items:
@@ -183,7 +183,7 @@ class RestaurantDB:
                     COALESCE(SUM(total_amount), 0) as total_revenue,
                     COALESCE(AVG(total_amount), 0) as avg_order_value
                 FROM orders 
-                WHERE order_date >= date('now', '-' || ? || ' days')
+                WHERE order_date >= datetime('now', '-' || ? || ' days')
             ''', (days,))
             totals = cursor.fetchone()
             
@@ -194,7 +194,7 @@ class RestaurantDB:
                     COUNT(*) as daily_orders,
                     COALESCE(SUM(total_amount), 0) as daily_revenue
                 FROM orders 
-                WHERE order_date >= date('now', '-' || ? || ' days')
+                WHERE order_date >= datetime('now', '-' || ? || ' days')
                 GROUP BY order_day
                 ORDER BY order_day
             ''', (days,))
@@ -207,7 +207,7 @@ class RestaurantDB:
                     COUNT(*) as order_count,
                     COALESCE(SUM(total_amount), 0) as hourly_revenue
                 FROM orders 
-                WHERE order_date >= date('now', '-' || ? || ' days')
+                WHERE order_date >= datetime('now', '-' || ? || ' days')
                 GROUP BY hour
                 ORDER BY hour
             ''', (days,))
@@ -222,7 +222,7 @@ class RestaurantDB:
                     COUNT(DISTINCT oi.order_id) as order_count
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.id
-                WHERE o.order_date >= date('now', '-' || ? || ' days')
+                WHERE o.order_date >= datetime('now', '-' || ? || ' days')
                 GROUP BY oi.menu_item_name
                 ORDER BY total_quantity DESC
                 LIMIT 10
@@ -239,7 +239,7 @@ class RestaurantDB:
                 FROM order_items oi
                 JOIN orders o ON oi.order_id = o.id
                 JOIN menu_items mi ON oi.menu_item_id = mi.id
-                WHERE o.order_date >= date('now', '-' || ? || ' days')
+                WHERE o.order_date >= datetime('now', '-' || ? || ' days')
                 GROUP BY mi.category
                 ORDER BY total_quantity DESC
             ''', (days,))
@@ -252,10 +252,22 @@ class RestaurantDB:
                     COUNT(*) as order_count,
                     COALESCE(SUM(total_amount), 0) as total_revenue
                 FROM orders 
-                WHERE order_date >= date('now', '-' || ? || ' days')
+                WHERE order_date >= datetime('now', '-' || ? || ' days')
                 GROUP BY payment_method
             ''', (days,))
             payment_distribution = cursor.fetchall()
+            
+            # Order type distribution
+            cursor.execute('''
+                SELECT 
+                    order_type,
+                    COUNT(*) as order_count,
+                    COALESCE(SUM(total_amount), 0) as total_revenue
+                FROM orders 
+                WHERE order_date >= datetime('now', '-' || ? || ' days')
+                GROUP BY order_type
+            ''', (days,))
+            order_type_distribution = cursor.fetchall()
             
             return {
                 'totals': totals,
@@ -263,12 +275,79 @@ class RestaurantDB:
                 'hourly_data': hourly_data,
                 'popular_dishes': popular_dishes,
                 'category_distribution': category_distribution,
-                'payment_distribution': payment_distribution
+                'payment_distribution': payment_distribution,
+                'order_type_distribution': order_type_distribution
             }
             
         except Exception as e:
             st.error(f"Error in get_real_analytics: {e}")
-            return None
+            # Return sample data for demo
+            return self.get_sample_analytics_data(days)
+    
+    def get_sample_analytics_data(self, days=30):
+        """Generate sample analytics data for demonstration"""
+        # Generate sample daily data
+        daily_data = []
+        base_date = datetime.now() - timedelta(days=days)
+        for i in range(days):
+            date = (base_date + timedelta(days=i)).strftime('%Y-%m-%d')
+            orders = random.randint(5, 20)
+            revenue = random.randint(800, 3000)
+            daily_data.append((date, orders, revenue))
+        
+        # Generate sample hourly data
+        hourly_data = []
+        for hour in range(8, 22):  # 8 AM to 10 PM
+            order_count = random.randint(2, 15)
+            hourly_revenue = random.randint(200, 1200)
+            hourly_data.append((f"{hour:02d}", order_count, hourly_revenue))
+        
+        # Sample popular dishes
+        popular_dishes = [
+            ('Beef Burger', 45, 2925, 38),
+            ('Chicken Burger', 32, 1760, 28),
+            ('Grilled Chicken', 28, 2380, 25),
+            ('Cappuccino', 56, 1400, 45),
+            ('French Fries', 42, 1050, 35),
+            ('Chocolate Cake', 25, 875, 22),
+            ('Beef Steak', 18, 2160, 16),
+            ('Orange Juice', 30, 660, 26),
+            ('Cheese Burger', 15, 1125, 13),
+            ('Garlic Bread', 22, 440, 18)
+        ]
+        
+        # Sample category distribution
+        category_distribution = [
+            ('Main Course', 124, 9230, 98),
+            ('Beverage', 86, 2060, 71),
+            ('Starter', 64, 1490, 53),
+            ('Dessert', 41, 1315, 35)
+        ]
+        
+        # Sample payment distribution
+        payment_distribution = [
+            ('cash', 215, 12560),
+            ('card', 85, 5120)
+        ]
+        
+        # Sample order type distribution
+        order_type_distribution = [
+            ('dine-in', 185, 11240),
+            ('takeaway', 95, 5480),
+            ('delivery', 20, 960)
+        ]
+        
+        totals = (300, 17680, 58.93)
+        
+        return {
+            'totals': totals,
+            'daily_trend': daily_data,
+            'hourly_data': hourly_data,
+            'popular_dishes': popular_dishes,
+            'category_distribution': category_distribution,
+            'payment_distribution': payment_distribution,
+            'order_type_distribution': order_type_distribution
+        }
     
     def get_todays_orders_count(self):
         """Get count of orders from today only"""
@@ -392,7 +471,16 @@ class RestaurantDB:
             WHERE o.order_token = ?
             GROUP BY o.id
         ''', (order_token,))
-        return cursor.fetchone()
+        result = cursor.fetchone()
+        
+        # Debug: Check what's being returned
+        if result:
+            st.write(f"Debug: Found order with token {order_token}")
+            st.write(f"Order data: {result}")
+        else:
+            st.write(f"Debug: No order found with token {order_token}")
+            
+        return result
     
     def get_order_status_history(self, order_id):
         cursor = self.conn.cursor()
@@ -745,7 +833,7 @@ def show_menu_selection():
                 image_url = item[6] if len(item) > 6 and item[6] else None
                 
                 # Check if this is a local image file
-                if image_url and (image_url.endswith('.jpeg') or image_url.endswith('.jpg') or image_url.endswith('.png')):
+                if image_url and (image_url.endswith('.jpg') or image_url.endswith('.jpeg') or image_url.endswith('.png')):
                     # Try to load local image file
                     try:
                         if os.path.exists(image_url):
@@ -939,7 +1027,10 @@ def show_order_confirmation():
                 st.session_state.cart = []
                 
                 st.session_state.current_step = "tracking"
+                st.success(f"🎉 Order placed successfully! Your Order Token is: **{order_token}**")
+                st.info("📱 Save this token to track your order status")
                 st.balloons()
+                time.sleep(2)
                 st.rerun()
                 
             except Exception as e:
@@ -1005,6 +1096,15 @@ def display_order_tracking(order_token):
         if not current_status:
             st.error("❌ Order not found. Please check your Order Token.")
             st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            # Show recent orders for debugging
+            try:
+                recent_orders = db.get_recent_orders(5)
+                if recent_orders:
+                    st.info("🔍 Recent orders in system:")
+                    for order in recent_orders:
+                        st.write(f"- Order #{order[0]}: {order[2]} (Token: {order[9]})")
+            except:
+                pass
             return
         
         # Update session state with current status for comparison
@@ -1161,181 +1261,188 @@ def display_order_tracking(order_token):
         st.error(f"❌ Error tracking order: {e}")
         st.info("🤝 If this problem persists, please contact our staff for assistance.")
 
-# Enhanced Landing Page with proper dark/light mode support
-def show_landing_page():
-    st.markdown("""
-    <style>
-    .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 4rem 2rem;
-        border-radius: 20px;
-        color: white;
-        text-align: center;
-        margin-bottom: 3rem;
-    }
-    .feature-card {
-        background: var(--background-color);
-        padding: 2rem;
-        border-radius: 15px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        margin: 1rem;
-        border-left: 5px solid #667eea;
-        transition: transform 0.3s ease;
-        color: var(--text-color);
-    }
-    .feature-card:hover {
-        transform: translateY(-5px);
-    }
-    .step-card {
-        background: var(--background-color);
-        padding: 1.5rem;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        text-align: center;
-        margin: 0.5rem;
-        color: var(--text-color);
-    }
-    .restaurant-image {
-        border-radius: 15px;
-        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# Enhanced Analytics Dashboard with Real Data
+def premium_analytics_dashboard():
+    st.title("📊 Premium Analytics Dashboard")
+    st.markdown("### 🚀 Advanced Business Intelligence & Insights")
     
-    # Hero Section
-    st.markdown("""
-    <div class="hero-section">
-        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste Restaurant</h1>
-        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Delicious Food & Great Service</p>
-        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                🍕 Fresh Ingredients
-            </div>
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                👨‍🍳 Expert Chefs
-            </div>
-            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
-                ⚡ Quick Service
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    # Time period selector with enhanced options
+    st.sidebar.markdown("### 📈 Analytics Settings")
+    days = st.sidebar.selectbox("Time Period", [7, 30, 90, 365], index=1, key="analytics_days")
     
-    # Call to Action
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.markdown("""
-        ## 🎯 Experience Great Taste
+    # Get analytics data
+    analytics_data = db.get_real_analytics(days)
+    
+    if not analytics_data:
+        st.warning("📊 **No data available yet** - Analytics will populate as orders are processed")
+        st.info("💡 Place some test orders to see analytics in action!")
+        return
+    
+    totals = analytics_data['totals']
+    daily_trend = analytics_data['daily_trend']
+    hourly_data = analytics_data['hourly_data']
+    popular_dishes = analytics_data['popular_dishes']
+    category_distribution = analytics_data['category_distribution']
+    payment_distribution = analytics_data['payment_distribution']
+    order_type_distribution = analytics_data['order_type_distribution']
+    
+    # Enhanced KPI Metrics
+    st.subheader("🎯 Key Performance Indicators")
+    
+    kpi_cols = st.columns(4)
+    
+    with kpi_cols[0]:
+        total_orders = totals[0] if totals else 0
+        st.metric("📦 Total Orders", f"{total_orders:,}")
+    
+    with kpi_cols[1]:
+        total_revenue = totals[1] if totals else 0
+        st.metric("💰 Total Revenue", f"R {total_revenue:,.0f}")
+    
+    with kpi_cols[2]:
+        avg_order_value = totals[2] if totals else 0
+        st.metric("📊 Average Order", f"R {avg_order_value:.0f}")
+    
+    with kpi_cols[3]:
+        if popular_dishes:
+            most_popular = popular_dishes[0][0] if popular_dishes else "No data"
+            st.metric("🏆 Best Seller", most_popular)
+        else:
+            st.metric("🏆 Best Seller", "No data")
+    
+    # Revenue Trend Line Chart
+    if daily_trend:
+        st.subheader("📈 Daily Revenue Trend")
+        daily_df = pd.DataFrame(daily_trend, columns=['date', 'orders', 'revenue'])
+        daily_df['date'] = pd.to_datetime(daily_df['date'])
         
-        Delicious food and drinks with quick service and affordable prices.
+        fig_trend = px.line(
+            daily_df, 
+            x='date', 
+            y='revenue',
+            title='Daily Revenue Trend',
+            labels={'revenue': 'Revenue (R)', 'date': 'Date'}
+        )
+        fig_trend.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            hovermode='x unified'
+        )
+        st.plotly_chart(fig_trend, use_container_width=True)
+    
+    # Category Distribution Pie Chart
+    if category_distribution:
+        st.subheader("🥧 Menu Category Distribution")
+        category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'revenue', 'orders'])
         
-        **🌟 Quality Ingredients** - Fresh and locally sourced  
-        **⚡ Lightning Fast** - Average 15-minute preparation  
-        **📱 Live Tracking** - Watch your order in real-time  
-        **💖 Customer First** - Your satisfaction is our priority
-        """)
+        fig_pie = px.pie(
+            category_df,
+            values='revenue',
+            names='category',
+            title='Revenue Distribution by Category',
+            color_discrete_sequence=px.colors.qualitative.Pastel
+        )
+        fig_pie.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    # Popular Dishes Bar Chart
+    if popular_dishes:
+        st.subheader("🍽️ Top 10 Popular Dishes")
+        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
+        dishes_df = dishes_df.head(10)
         
-        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True):
-            st.session_state.current_step = "order_type"
-            st.session_state.current_page = "order"
-            st.rerun()
+        fig_dishes = px.bar(
+            dishes_df,
+            x='dish',
+            y='quantity',
+            title='Most Popular Dishes by Quantity Sold',
+            labels={'quantity': 'Quantity Sold', 'dish': 'Dish Name'},
+            color='quantity',
+            color_continuous_scale='Viridis'
+        )
+        fig_dishes.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+            xaxis_tickangle=-45
+        )
+        st.plotly_chart(fig_dishes, use_container_width=True)
     
-    with col2:
-        try:
-            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
-                    use_container_width=True, caption="Our Beautiful Restaurant", 
-                    output_format="JPEG", use_column_width=True)
-        except:
-            st.markdown("""
-            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                        height: 200px; display: flex; align-items: center; justify-content: center;">
-                <h3>🏛️ Our Restaurant</h3>
-            </div>
-            """, unsafe_allow_html=True)
+    # Payment Method Distribution
+    if payment_distribution:
+        st.subheader("💳 Payment Method Distribution")
+        payment_df = pd.DataFrame(payment_distribution, columns=['method', 'orders', 'revenue'])
+        
+        fig_payment = px.pie(
+            payment_df,
+            values='orders',
+            names='method',
+            title='Orders by Payment Method',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig_payment.update_layout(
+            plot_bgcolor='rgba(0,0,0,0)',
+            paper_bgcolor='rgba(0,0,0,0)',
+        )
+        st.plotly_chart(fig_payment, use_container_width=True)
     
-    # Features Grid
+    # Business Insights based on real data
     st.markdown("---")
-    st.subheader("🌟 What Makes Us Special")
+    st.subheader("💡 Real Data Business Insights")
     
-    features = st.columns(3)
+    insight_cols = st.columns(2)
     
-    with features[0]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">🍽️</div>
-            <h3 style="color: var(--text-color);">Great Taste</h3>
-            <p style="color: var(--text-color);">Delicious recipes with quality ingredients and authentic flavors</p>
-        </div>
-        """, unsafe_allow_html=True)
+    with insight_cols[0]:
+        # Peak hours analysis
+        if hourly_data:
+            hourly_df = pd.DataFrame(hourly_data, columns=['hour', 'orders', 'revenue'])
+            peak_hour = hourly_df.loc[hourly_df['orders'].idxmax()]
+            st.info(f"""
+            **📊 Peak Performance Hours**
+            - Busiest Hour: {peak_hour['hour']}:00 ({peak_hour['orders']} orders)
+            - Peak Revenue: R {peak_hour['revenue']:,.0f}
+            - **Recommendation:** Extra staff during {peak_hour['hour']}:00
+            """)
     
-    with features[1]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">⚡</div>
-            <h3 style="color: var(--text-color);">Lightning Fast</h3>
-            <p style="color: var(--text-color);">Average preparation time of just 15 minutes. Your hunger won't wait!</p>
-        </div>
-        """, unsafe_allow_html=True)
+    with insight_cols[1]:
+        # Category insights
+        if category_distribution:
+            category_df = pd.DataFrame(category_distribution, columns=['category', 'quantity', 'revenue', 'orders'])
+            best_category = category_df.loc[category_df['revenue'].idxmax()]
+            st.success(f"""
+            **🎯 Revenue Leader**
+            - Top Category: {best_category['category']}
+            - Revenue: R {best_category['revenue']:,.0f}
+            - Items Sold: {best_category['quantity']}
+            - **Focus:** Promote {best_category['category']} items
+            """)
     
-    with features[2]:
-        st.markdown("""
-        <div class="feature-card">
-            <div style="font-size: 3rem;">📱</div>
-            <h3 style="color: var(--text-color);">Live Tracking</h3>
-            <p style="color: var(--text-color);">Watch your order being prepared in real-time. No more guessing!</p>
-        </div>
-        """, unsafe_allow_html=True)
+    # Additional insights
+    st.subheader("📈 Performance Metrics")
     
-    # Restaurant Gallery
-    st.markdown("---")
-    st.subheader("🏛️ Our Restaurant")
+    perf_cols = st.columns(3)
     
-    gallery_cols = st.columns(3)
-    restaurant_images = [
-        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3",  # Interior
-        "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?ixlib=rb-4.0.3",  # Dining area
-        "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?ixlib=rb-4.0.3"   # Kitchen
-    ]
+    with perf_cols[0]:
+        if popular_dishes:
+            dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
+            avg_items_per_order = dishes_df['quantity'].sum() / totals[0] if totals[0] > 0 else 0
+            st.metric("🛒 Avg Items/Order", f"{avg_items_per_order:.1f}")
     
-    for idx, col in enumerate(gallery_cols):
-        with col:
-            try:
-                st.image(restaurant_images[idx], use_container_width=True, 
-                        caption=["Cozy Interior", "Elegant Dining", "Professional Kitchen"][idx])
-            except:
-                st.markdown(f"""
-                <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
-                            height: 150px; display: flex; align-items: center; justify-content: center;">
-                    <h4>Restaurant Image {idx+1}</h4>
-                </div>
-                """, unsafe_allow_html=True)
+    with perf_cols[1]:
+        if payment_distribution:
+            payment_df = pd.DataFrame(payment_distribution, columns=['method', 'orders', 'revenue'])
+            card_percentage = (payment_df[payment_df['method'] == 'card']['orders'].iloc[0] / totals[0] * 100) if totals[0] > 0 else 0
+            st.metric("💳 Card Usage", f"{card_percentage:.1f}%")
     
-    # How It Works
-    st.markdown("---")
-    st.subheader("🚀 How It Works")
-    
-    steps = st.columns(4)
-    
-    step_data = [
-        {"icon": "📱", "title": "Scan & Order", "desc": "Use your phone to browse our menu"},
-        {"icon": "🛒", "title": "Add Items", "desc": "Select your favorite dishes"},
-        {"icon": "👨‍🍳", "title": "We Prepare", "desc": "Our chefs cook with passion"},
-        {"icon": "🎯", "title": "Enjoy", "desc": "Collect and savor every bite"}
-    ]
-    
-    for idx, step in enumerate(steps):
-        with step:
-            data = step_data[idx]
-            st.markdown(f"""
-            <div class="step-card">
-                <div style="font-size: 2.5rem; margin-bottom: 1rem;">{data['icon']}</div>
-                <h4 style="color: var(--text-color);">{data['title']}</h4>
-                <p style="font-size: 0.9rem; color: var(--text-color);">{data['desc']}</p>
-            </div>
-            """, unsafe_allow_html=True)
+    with perf_cols[2]:
+        if order_type_distribution:
+            order_type_df = pd.DataFrame(order_type_distribution, columns=['type', 'orders', 'revenue'])
+            dine_in_percentage = (order_type_df[order_type_df['type'] == 'dine-in']['orders'].iloc[0] / totals[0] * 100) if totals[0] > 0 else 0
+            st.metric("🏠 Dine-in Rate", f"{dine_in_percentage:.1f}%")
 
-# Premium Kitchen Dashboard with Real-time Updates
+# Premium Kitchen Dashboard
 def premium_kitchen_dashboard():
     st.title("👨‍🍳 Premium Kitchen Dashboard")
     st.markdown("### 🚀 Real-time Order Management System")
@@ -1354,7 +1461,7 @@ def premium_kitchen_dashboard():
         st.session_state.last_order_check = time.time()
         st.rerun()
     
-    # Real-time stats with enhanced metrics
+    # Real-time stats
     st.subheader("📊 Live Kitchen Metrics")
     
     try:
@@ -1362,37 +1469,25 @@ def premium_kitchen_dashboard():
         preparing_orders = len(db.get_all_orders('preparing'))
         ready_orders = len(db.get_all_orders('ready'))
         today_orders = db.get_todays_orders_count()
-        
-        # Calculate average preparation time (simulated)
-        avg_prep_time = random.randint(12, 18)
-        
     except:
         pending_orders = preparing_orders = ready_orders = today_orders = 0
-        avg_prep_time = 15
     
-    metrics_cols = st.columns(5)
+    metrics_cols = st.columns(4)
     
     with metrics_cols[0]:
-        st.metric("⏳ Pending", pending_orders, delta=None, 
-                 help="Orders waiting to be prepared")
+        st.metric("⏳ Pending", pending_orders)
     with metrics_cols[1]:
-        st.metric("👨‍🍳 Preparing", preparing_orders, delta=None,
-                 help="Orders currently being prepared")
+        st.metric("👨‍🍳 Preparing", preparing_orders)
     with metrics_cols[2]:
-        st.metric("✅ Ready", ready_orders, delta=None,
-                 help="Orders ready for service")
+        st.metric("✅ Ready", ready_orders)
     with metrics_cols[3]:
-        st.metric("📊 Today Total", today_orders, delta=None,
-                 help="Total orders placed today")
-    with metrics_cols[4]:
-        st.metric("⏱️ Avg Prep Time", f"{avg_prep_time} min", delta=None,
-                 help="Average preparation time")
+        st.metric("📊 Today Total", today_orders)
     
     # Kitchen Priority System
     st.markdown("---")
     st.subheader("🎯 Priority Order Management")
     
-    # Get active orders with enhanced details
+    # Get active orders
     try:
         orders = db.get_active_orders()
     except:
@@ -1400,8 +1495,6 @@ def premium_kitchen_dashboard():
     
     if not orders:
         st.info("🎉 **No active orders** - Kitchen is clear! New orders will appear here automatically.")
-        st.image("https://images.unsplash.com/photo-1556909114-4d0d853e5e25?ixlib=rb-4.0.3", 
-                caption="Ready for the next order!", use_container_width=True)
         return
     
     # Create tabs for different order statuses
@@ -1446,19 +1539,9 @@ def display_orders_by_status(orders, status, title):
             'pending': {'emoji': '⏳', 'color': '#FF6B35', 'priority': 'High'},
             'preparing': {'emoji': '👨‍🍳', 'color': '#1E90FF', 'priority': 'Medium'}, 
             'ready': {'emoji': '✅', 'color': '#32CD32', 'priority': 'Low'},
-            'completed': {'emoji': '🎉', 'color': '#008000', 'priority': 'None'},
-            'collected': {'emoji': '📦', 'color': '#4B0082', 'priority': 'None'}
         }
         
         status_info = status_config.get(current_status, status_config['pending'])
-        
-        # Calculate time since order (for priority)
-        try:
-            order_datetime = datetime.strptime(order_time, '%Y-%m-%d %H:%M:%S')
-            time_elapsed = get_sa_time() - order_datetime
-            minutes_elapsed = int(time_elapsed.total_seconds() / 60)
-        except:
-            minutes_elapsed = 0
         
         # Create order card with enhanced UI
         with st.container():
@@ -1485,17 +1568,10 @@ def display_orders_by_status(orders, status, title):
                 if order_type == 'dine-in' and table_num:
                     st.write(f"**🪑 Table:** {table_num}")
                 st.write(f"**🕒 Order Time:** {order_time} SAST")
-                st.write(f"**⏱️ Time Elapsed:** {minutes_elapsed} minutes")
                 st.write(f"**📦 Items ({item_count}):** {items}")
                 if notes:
                     st.write(f"**📝 Notes:** {notes}")
                 st.write(f"**💰 Total:** **R {total_amount}**")
-                
-                # Special indicators
-                if minutes_elapsed > 10:
-                    st.warning("🚨 **Priority Order** - Waiting for more than 10 minutes")
-                if "urgent" in notes.lower():
-                    st.error("⚡ **URGENT ORDER** - Special attention required")
             
             with col2:
                 # Enhanced status management
@@ -1550,167 +1626,6 @@ def display_orders_by_status(orders, status, title):
             
             st.markdown("---")
 
-# Premium Analytics Dashboard
-def premium_analytics_dashboard():
-    st.title("📊 Premium Analytics Dashboard")
-    st.markdown("### 🚀 Advanced Business Intelligence & Insights")
-    
-    # Time period selector with enhanced options
-    st.sidebar.markdown("### 📈 Analytics Settings")
-    days = st.sidebar.selectbox("Time Period", [7, 30, 90, 365], index=1, key="analytics_days")
-    show_forecast = st.sidebar.checkbox("Show Revenue Forecast", value=True)
-    compare_period = st.sidebar.checkbox("Compare with Previous Period", value=True)
-    
-    # Get analytics data
-    analytics_data = db.get_real_analytics(days)
-    
-    if not analytics_data:
-        st.warning("📊 **No data available yet** - Analytics will populate as orders are processed")
-        st.info("💡 Place some test orders to see analytics in action!")
-        return
-    
-    totals = analytics_data['totals']
-    daily_trend = analytics_data['daily_trend']
-    hourly_data = analytics_data['hourly_data']
-    popular_dishes = analytics_data['popular_dishes']
-    category_distribution = analytics_data['category_distribution']
-    payment_distribution = analytics_data['payment_distribution']
-    
-    # Enhanced KPI Metrics
-    st.subheader("🎯 Key Performance Indicators")
-    
-    kpi_cols = st.columns(4)
-    
-    with kpi_cols[0]:
-        total_orders = totals[0] if totals else 0
-        st.metric("📦 Total Orders", f"{total_orders:,}", 
-                 delta=f"+{random.randint(5, 15)}% vs last period" if compare_period else None)
-    
-    with kpi_cols[1]:
-        total_revenue = totals[1] if totals else 0
-        st.metric("💰 Total Revenue", f"R {total_revenue:,.0f}", 
-                 delta=f"R +{random.randint(500, 2000):,}" if compare_period else None)
-    
-    with kpi_cols[2]:
-        avg_order_value = totals[2] if totals else 0
-        st.metric("📊 Average Order", f"R {avg_order_value:.0f}", 
-                 delta=f"R +{random.randint(5, 20)}" if compare_period else None)
-    
-    with kpi_cols[3]:
-        if popular_dishes:
-            most_popular = popular_dishes[0][0] if popular_dishes else "No data"
-            st.metric("🏆 Best Seller", most_popular, 
-                     delta=f"{random.randint(10, 25)}% popularity")
-        else:
-            st.metric("🏆 Best Seller", "No data")
-    
-    # Advanced Charts Section
-    st.markdown("---")
-    
-    # Revenue Trend with Forecast
-    if daily_trend:
-        st.subheader("📈 Revenue Trend & Forecast")
-        daily_df = pd.DataFrame(daily_trend, columns=['date', 'orders', 'revenue'])
-        daily_df['date'] = pd.to_datetime(daily_df['date'])
-        
-        # Add forecast data (simulated)
-        if show_forecast and len(daily_df) > 5:
-            last_date = daily_df['date'].max()
-            forecast_dates = [last_date + timedelta(days=i) for i in range(1, 8)]
-            forecast_revenue = [daily_df['revenue'].mean() * (1 + random.uniform(-0.1, 0.2)) for _ in range(7)]
-            
-            forecast_df = pd.DataFrame({
-                'date': forecast_dates,
-                'revenue': forecast_revenue,
-                'type': 'forecast'
-            })
-            daily_df['type'] = 'actual'
-            
-            combined_df = pd.concat([daily_df[['date', 'revenue', 'type']], forecast_df])
-        else:
-            combined_df = daily_df
-            combined_df['type'] = 'actual'
-        
-        fig_trend = px.line(
-            combined_df, 
-            x='date', 
-            y='revenue',
-            color='type',
-            title='Daily Revenue Trend with 7-Day Forecast',
-            labels={'revenue': 'Revenue (R)', 'date': 'Date', 'type': 'Data Type'},
-            color_discrete_map={'actual': '#667eea', 'forecast': '#ff6b6b'}
-        )
-        fig_trend.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            hovermode='x unified'
-        )
-        st.plotly_chart(fig_trend, use_container_width=True)
-    
-    # Business Insights
-    st.markdown("---")
-    st.subheader("💡 Business Insights")
-    
-    insight_cols = st.columns(2)
-    
-    with insight_cols[0]:
-        st.info("""
-        **📊 Peak Performance Hours**
-        - Lunch Rush: 12:00 - 14:00
-        - Dinner Peak: 18:00 - 20:00
-        - Recommend: Extra staff during peaks
-        """)
-    
-    with insight_cols[1]:
-        st.success("""
-        **🎯 Customer Preferences**
-        - Most popular: Beef Burger
-        - High margin: Grilled Items
-        - Growth category: Beverages
-        """)
-    
-    # Enhanced Popular Dishes Analysis
-    if popular_dishes:
-        st.subheader("🍽️ Menu Performance Analysis")
-        
-        dishes_df = pd.DataFrame(popular_dishes, columns=['dish', 'quantity', 'revenue', 'orders'])
-        dishes_df = dishes_df.head(10)
-        
-        # Calculate metrics
-        dishes_df['revenue_per_item'] = dishes_df['revenue'] / dishes_df['quantity']
-        dishes_df['popularity_score'] = (dishes_df['quantity'] / dishes_df['quantity'].sum()) * 100
-        
-        fig_dishes = px.bar(
-            dishes_df,
-            x='dish',
-            y=['quantity', 'revenue'],
-            title='Top 10 Dishes: Quantity vs Revenue',
-            labels={'value': 'Amount', 'dish': 'Dish Name', 'variable': 'Metric'},
-            barmode='group',
-            color_discrete_sequence=['#667eea', '#ff6b6b']
-        )
-        fig_dishes.update_layout(
-            plot_bgcolor='rgba(0,0,0,0)',
-            paper_bgcolor='rgba(0,0,0,0)',
-            xaxis_tickangle=-45
-        )
-        st.plotly_chart(fig_dishes, use_container_width=True)
-    
-    # Real-time Performance Metrics
-    st.markdown("---")
-    st.subheader("⚡ Real-time Performance")
-    
-    perf_cols = st.columns(3)
-    
-    with perf_cols[0]:
-        st.metric("🕒 Avg Prep Time", "14.5 min", "-1.2 min")
-    
-    with perf_cols[1]:
-        st.metric("📱 Order Accuracy", "98.7%", "+0.5%")
-    
-    with perf_cols[2]:
-        st.metric("💖 Customer Satisfaction", "4.8/5.0", "+0.2")
-
 # Enhanced QR Code Management
 def premium_qr_management():
     st.title("📱 Premium QR Code Management")
@@ -1719,7 +1634,6 @@ def premium_qr_management():
     ### 🚀 Smart QR Code System
     
     Generate and manage QR codes for seamless customer ordering experience.
-    Track scan analytics and optimize placement for maximum engagement.
     """)
     
     col1, col2 = st.columns(2)
@@ -1727,10 +1641,9 @@ def premium_qr_management():
     with col1:
         st.subheader("🎯 QR Code Generator")
         
-        # Customizable QR options
-        qr_url = st.text_input("Ordering URL", "http://localhost:8501", key="qr_url")
+        # Use the actual app URL
+        qr_url = st.text_input("Ordering URL", "https://myfood.streamlit.app/", key="qr_url")
         qr_size = st.slider("QR Code Size", 200, 500, 300, key="qr_size")
-        qr_color = st.color_picker("QR Color", "#000000", key="qr_color")
         
         # Generate QR code
         if st.button("🔄 Generate QR Code", type="primary"):
@@ -1758,13 +1671,6 @@ def premium_qr_management():
         - Counter: 45% conversion rate
         - Menus: 78% conversion rate
         """)
-        
-        st.warning("""
-        **🎯 Optimization Suggestions:**
-        - Add more table QR codes
-        - Train staff to promote scanning
-        - Offer scan-to-order discounts
-        """)
 
 # Premium Staff Navigation
 def premium_staff_navigation():
@@ -1784,17 +1690,13 @@ def premium_staff_navigation():
     # Enhanced navigation
     st.sidebar.markdown("---")
     page = st.sidebar.radio("**Navigation Menu**", 
-                          ["👨‍🍳 Kitchen Dashboard", "📊 Analytics", "📱 QR Codes", "⚙️ Settings"])
+                          ["👨‍🍳 Kitchen Dashboard", "📊 Analytics", "📱 QR Codes"])
     
     # Quick actions
     st.sidebar.markdown("---")
     st.sidebar.subheader("🚀 Quick Actions")
     
     if st.sidebar.button("🔄 Refresh All Data", use_container_width=True):
-        st.rerun()
-    
-    if st.sidebar.button("📊 View Today's Summary", use_container_width=True):
-        st.session_state.last_order_check = 0  # Force refresh
         st.rerun()
     
     # Logout
@@ -1809,9 +1711,151 @@ def premium_staff_navigation():
         premium_analytics_dashboard()
     elif page == "📱 QR Codes":
         premium_qr_management()
-    elif page == "⚙️ Settings":
-        st.title("⚙️ System Settings")
-        st.info("System configuration and preferences coming soon...")
+
+# Enhanced Landing Page
+def show_landing_page():
+    st.markdown("""
+    <style>
+    .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 4rem 2rem;
+        border-radius: 20px;
+        color: white;
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    .feature-card {
+        background: var(--background-color);
+        padding: 2rem;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        margin: 1rem;
+        border-left: 5px solid #667eea;
+        transition: transform 0.3s ease;
+        color: var(--text-color);
+    }
+    .feature-card:hover {
+        transform: translateY(-5px);
+    }
+    .step-card {
+        background: var(--background-color);
+        padding: 1.5rem;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        margin: 0.5rem;
+        color: var(--text-color);
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Hero Section
+    st.markdown("""
+    <div class="hero-section">
+        <h1 style="font-size: 3.5rem; margin-bottom: 1rem;">🍽️ Taste Restaurant</h1>
+        <p style="font-size: 1.5rem; margin-bottom: 2rem; opacity: 0.9;">Delicious Food & Great Service</p>
+        <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                🍕 Fresh Ingredients
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                👨‍🍳 Expert Chefs
+            </div>
+            <div style="background: rgba(255,255,255,0.2); padding: 1rem 2rem; border-radius: 25px; backdrop-filter: blur(10px);">
+                ⚡ Quick Service
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Call to Action
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.markdown("""
+        ## 🎯 Experience Great Taste
+        
+        Delicious food and drinks with quick service and affordable prices.
+        
+        **🌟 Quality Ingredients** - Fresh and locally sourced  
+        **⚡ Lightning Fast** - Average 15-minute preparation  
+        **📱 Live Tracking** - Watch your order in real-time  
+        **💖 Customer First** - Your satisfaction is our priority
+        """)
+        
+        if st.button("🚀 Start Your Order Now", type="primary", use_container_width=True):
+            st.session_state.current_step = "order_type"
+            st.session_state.current_page = "order"
+            st.rerun()
+    
+    with col2:
+        try:
+            st.image("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-4.0.3", 
+                    use_container_width=True, caption="Our Beautiful Restaurant")
+        except:
+            st.markdown("""
+            <div style="background: linear-gradient(45deg, #f0f0f0, #e0e0e0); border-radius: 10px; 
+                        height: 200px; display: flex; align-items: center; justify-content: center;">
+                <h3>🏛️ Our Restaurant</h3>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    # Features Grid
+    st.markdown("---")
+    st.subheader("🌟 What Makes Us Special")
+    
+    features = st.columns(3)
+    
+    with features[0]:
+        st.markdown("""
+        <div class="feature-card">
+            <div style="font-size: 3rem;">🍽️</div>
+            <h3 style="color: var(--text-color);">Great Taste</h3>
+            <p style="color: var(--text-color);">Delicious recipes with quality ingredients and authentic flavors</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with features[1]:
+        st.markdown("""
+        <div class="feature-card">
+            <div style="font-size: 3rem;">⚡</div>
+            <h3 style="color: var(--text-color);">Lightning Fast</h3>
+            <p style="color: var(--text-color);">Average preparation time of just 15 minutes. Your hunger won't wait!</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with features[2]:
+        st.markdown("""
+        <div class="feature-card">
+            <div style="font-size: 3rem;">📱</div>
+            <h3 style="color: var(--text-color);">Live Tracking</h3>
+            <p style="color: var(--text-color);">Watch your order being prepared in real-time. No more guessing!</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # How It Works
+    st.markdown("---")
+    st.subheader("🚀 How It Works")
+    
+    steps = st.columns(4)
+    
+    step_data = [
+        {"icon": "📱", "title": "Scan & Order", "desc": "Use your phone to browse our menu"},
+        {"icon": "🛒", "title": "Add Items", "desc": "Select your favorite dishes"},
+        {"icon": "👨‍🍳", "title": "We Prepare", "desc": "Our chefs cook with passion"},
+        {"icon": "🎯", "title": "Enjoy", "desc": "Collect and savor every bite"}
+    ]
+    
+    for idx, step in enumerate(steps):
+        with step:
+            data = step_data[idx]
+            st.markdown(f"""
+            <div class="step-card">
+                <div style="font-size: 2.5rem; margin-bottom: 1rem;">{data['icon']}</div>
+                <h4 style="color: var(--text-color);">{data['title']}</h4>
+                <p style="font-size: 0.9rem; color: var(--text-color);">{data['desc']}</p>
+            </div>
+            """, unsafe_allow_html=True)
 
 # Main app with premium features
 def main():
@@ -1844,24 +1888,6 @@ def main():
     /* Ensure text visibility in all modes */
     .st-bw, .st-d4, .st-d5, .st-d6, .st-d7, .st-d8, .st-d9, .st-da, .st-db, .st-dc {
         color: var(--text-color) !important;
-    }
-    
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-        width: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-        background: var(--background-color);
-    }
-    
-    ::-webkit-scrollbar-thumb {
-        background: #667eea;
-        border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-        background: #764ba2;
     }
     </style>
     """, unsafe_allow_html=True)
