@@ -140,27 +140,27 @@ class RestaurantDB:
             ('Cappuccino', 'Freshly brewed coffee with steamed milk', 25, 'Beverage', 'https://images.unsplash.com/photo-1561047029-3000c68339ca?ixlib=rb-4.0.3'),
             ('Coca-Cola', 'Ice cold Coca-Cola', 18, 'Beverage', 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?ixlib=rb-4.0.3'),
             ('Orange Juice', 'Freshly squeezed orange juice', 22, 'Beverage', 'https://images.unsplash.com/photo-1613478223719-2ab802602423?ixlib=rb-4.0.3'),
-            ('Bottled Water', '500ml still water', 15, 'Beverage', 'bottled_water.jpg'),  # Local image
+            ('Bottled Water', '500ml still water', 15, 'Beverage', 'bottled_water.jpg'),
             
             # BURGERS
             ('Beef Burger', 'Classic beef burger with cheese and veggies', 65, 'Main Course', 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?ixlib=rb-4.0.3'),
-            ('Chicken Burger', 'Grilled chicken breast with mayo and lettuce', 55, 'Main Course', 'chicken_burger.jpg'),  # Local image
+            ('Chicken Burger', 'Grilled chicken breast with mayo and lettuce', 55, 'Main Course', 'chicken_burger.jpg'),
             ('Cheese Burger', 'Double beef patty with extra cheese', 75, 'Main Course', 'https://images.unsplash.com/photo-1607013251379-e6eecfffe234?ixlib=rb-4.0.3'),
             
             # GRILLED ITEMS
             ('Grilled Chicken', 'Tender grilled chicken breast with herbs', 85, 'Main Course', 'https://images.unsplash.com/photo-1532550907401-a500c9a57435?ixlib=rb-4.0.3'),
-            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'beef_steak.jpg'),  # Local image
-            ('Grilled Fish', 'Fresh fish with lemon butter sauce', 95, 'Main Course', 'grilled_fish.jpg'),  # Local image
+            ('Beef Steak', 'Juicy beef steak with pepper sauce', 120, 'Main Course', 'beef_steak.jpg'),
+            ('Grilled Fish', 'Fresh fish with lemon butter sauce', 95, 'Main Course', 'grilled_fish.jpg'),
             
             # DESSERTS
             ('Chocolate Cake', 'Rich chocolate cake with ganache', 35, 'Dessert', 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?ixlib=rb-4.0.3'),
             ('Ice Cream', 'Vanilla ice cream with chocolate sauce', 25, 'Dessert', 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?ixlib=rb-4.0.3'),
-            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'apple_pie.jpg'),  # Local image
+            ('Apple Pie', 'Warm apple pie with cinnamon', 30, 'Dessert', 'apple_pie.jpg'),
             
             # SIDES
             ('French Fries', 'Crispy golden fries', 25, 'Starter', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?ixlib=rb-4.0.3'),
-            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'onion_rings.jpg'),  # Local image
-            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'garlic_bread.jpg')  # Local image
+            ('Onion Rings', 'Beer-battered onion rings', 28, 'Starter', 'onion_rings.jpg'),
+            ('Garlic Bread', 'Toasted bread with garlic butter', 20, 'Starter', 'garlic_bread.jpg')
         ]
         
         for item in menu_items:
@@ -423,27 +423,39 @@ class RestaurantDB:
         # Use current South African timestamp for order date
         current_time = get_sa_time().strftime('%Y-%m-%d %H:%M:%S')
         
-        cursor.execute('''
-            INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (customer_name, order_type, table_number, total_amount, notes, order_token, current_time, payment_method))
-        
-        order_id = cursor.lastrowid
-        
-        for item in items:
+        try:
             cursor.execute('''
-                INSERT INTO order_items (order_id, menu_item_id, menu_item_name, quantity, price, special_instructions)
-                VALUES (?, ?, ?, ?, ?, ?)
-            ''', (order_id, item['id'], item['name'], item['quantity'], item['price'], item.get('instructions', '')))
-        
-        # Add initial status to history
-        cursor.execute('''
-            INSERT INTO order_status_history (order_id, status, notes)
-            VALUES (?, ?, ?)
-        ''', (order_id, 'pending', 'Order placed by customer'))
-        
-        self.conn.commit()
-        return order_id, order_token
+                INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (customer_name, order_type, table_number, total_amount, notes, order_token, current_time, payment_method))
+            
+            order_id = cursor.lastrowid
+            
+            for item in items:
+                cursor.execute('''
+                    INSERT INTO order_items (order_id, menu_item_id, menu_item_name, quantity, price, special_instructions)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (order_id, item['id'], item['name'], item['quantity'], item['price'], item.get('instructions', '')))
+            
+            # Add initial status to history
+            cursor.execute('''
+                INSERT INTO order_status_history (order_id, status, notes)
+                VALUES (?, ?, ?)
+            ''', (order_id, 'pending', 'Order placed by customer'))
+            
+            self.conn.commit()
+            
+            # Verify the order was created
+            cursor.execute('SELECT COUNT(*) FROM orders WHERE order_token = ?', (order_token,))
+            if cursor.fetchone()[0] == 0:
+                raise Exception("Order was not created successfully")
+                
+            return order_id, order_token
+            
+        except Exception as e:
+            self.conn.rollback()
+            st.error(f"Error adding order: {e}")
+            raise e
     
     def update_order_status(self, order_id, new_status, notes=""):
         cursor = self.conn.cursor()
@@ -463,34 +475,34 @@ class RestaurantDB:
         """FIXED: Simple and reliable order retrieval by token"""
         cursor = self.conn.cursor()
         try:
-            # Get the order
+            # First check if order exists
             cursor.execute('SELECT * FROM orders WHERE order_token = ?', (order_token,))
             order = cursor.fetchone()
             
             if not order:
                 return None
-                
+            
             # Get order items
             cursor.execute('''
-                SELECT menu_item_name, quantity, price, special_instructions 
+                SELECT menu_item_name, quantity, special_instructions 
                 FROM order_items 
                 WHERE order_id = ?
-            ''', (order[0],))
+            ''', (order[0],))  # order[0] is the order_id
             items = cursor.fetchall()
             
             # Format items string
             items_list = []
             for item in items:
                 item_str = f"{item[0]} (x{item[1]})"
-                if item[3]:  # special instructions
-                    item_str += f" - {item[3]}"
+                if item[2]:  # special instructions
+                    item_str += f" - {item[2]}"
                 items_list.append(item_str)
             
             items_str = ", ".join(items_list)
             item_count = len(items)
             
-            # Return complete order info as a tuple matching expected structure
-            return (
+            # Create complete order tuple with all fields in correct order
+            complete_order = (
                 order[0],   # id
                 order[1],   # table_number
                 order[2],   # customer_name
@@ -505,6 +517,8 @@ class RestaurantDB:
                 items_str,  # items
                 item_count  # item_count
             )
+            
+            return complete_order
             
         except Exception as e:
             st.error(f"Database error in get_order_by_token: {e}")
@@ -522,15 +536,16 @@ class RestaurantDB:
     def get_order_status(self, order_token):
         """Get just the current status of an order for live updates"""
         cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT status FROM orders WHERE order_token = ?
-        ''', (order_token,))
-        result = cursor.fetchone()
-        return result[0] if result else None
+        try:
+            cursor.execute('SELECT status FROM orders WHERE order_token = ?', (order_token,))
+            result = cursor.fetchone()
+            return result[0] if result else None
+        except Exception as e:
+            st.error(f"Error getting order status: {e}")
+            return None
 
-# Initialize database with forced reset
+# Initialize database
 try:
-    # Delete existing database to force fresh start
     if os.path.exists("restaurant.db"):
         os.remove("restaurant.db")
     db = RestaurantDB()
@@ -1081,21 +1096,10 @@ def track_order():
     
     st.markdown('<div class="tracking-header"><h1>📱 Track Your Order</h1><p>Watch your meal being prepared in real-time</p></div>', unsafe_allow_html=True)
     
-    # Initialize session state for tracking
-    if 'tracking_order_token' not in st.session_state:
-        st.session_state.tracking_order_token = None
-    if 'tracking_order_placed' not in st.session_state:
-        st.session_state.tracking_order_placed = False
-    
     # Check if we have an active order from the ordering flow
     if st.session_state.get('order_placed') and st.session_state.get('order_token'):
         order_token = st.session_state.order_token
-        st.session_state.tracking_order_token = order_token
-        st.session_state.tracking_order_placed = True
         display_order_tracking(order_token)
-    elif st.session_state.tracking_order_placed and st.session_state.tracking_order_token:
-        # Use the stored tracking token
-        display_order_tracking(st.session_state.tracking_order_token)
     else:
         # Allow manual order token entry
         st.info("🔍 **Enter your Order Token to track your order status**")
@@ -1103,188 +1107,184 @@ def track_order():
         
         if st.button("🔍 Track Order", type="primary", key="track_order_btn"):
             if order_token:
-                st.session_state.tracking_order_token = order_token
-                st.session_state.tracking_order_placed = True
-                st.rerun()
+                if order_token.startswith("ORD") and len(order_token) > 3:
+                    display_order_tracking(order_token)
+                else:
+                    st.error("❌ Invalid Order Token format. It should start with 'ORD' followed by numbers.")
             else:
                 st.error("❌ Please enter your order token")
 
 def display_order_tracking(order_token):
     try:
-        # Get current order status for live updates
+        # First check if order exists
         current_status = db.get_order_status(order_token)
         
-        if not current_status:
+        if current_status is None:
             st.error("❌ Order not found. Please check your Order Token.")
-            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
             
-            # Show recent orders for debugging
+            # Show debugging information
+            st.info("💡 Debug Information:")
+            
+            # Check recent orders to help debug
             try:
                 recent_orders = db.get_recent_orders(5)
                 if recent_orders:
-                    st.info("🔍 Recent orders in system:")
+                    st.write("Recent orders in system:")
                     for order in recent_orders:
                         st.write(f"- Order #{order[0]}: {order[2]} (Token: {order[9]})")
-            except:
-                pass
+                else:
+                    st.write("No orders found in system.")
+            except Exception as e:
+                st.write(f"Error checking recent orders: {e}")
+                
             return
         
-        # If order is collected/completed, show completion message and stop tracking
+        # If order is collected/completed, show completion message
         if current_status in ['completed', 'collected']:
             st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
             st.balloons()
             st.info("💫 We hope you enjoyed your meal!")
             return
         
-        # Update session state with current status for comparison
-        previous_status = st.session_state.get('current_order_status')
-        if current_status != previous_status:
-            st.session_state.current_order_status = current_status
-            # Force a rerun when status changes
-            st.rerun()
-        
-        # Get full order details using the fixed function
+        # Get full order details
         order = db.get_order_by_token(order_token)
         
-        if order:
-            # Status configuration
-            status_config = {
-                'pending': {'emoji': '⏳', 'color': '#FFA500', 'name': 'Order Received', 'description': 'We have received your order'},
-                'preparing': {'emoji': '👨‍🍳', 'color': '#1E90FF', 'name': 'Preparing', 'description': 'Our chefs are cooking your meal'},
-                'ready': {'emoji': '✅', 'color': '#32CD32', 'name': 'Ready', 'description': 'Your order is ready!'},
-                'completed': {'emoji': '🎉', 'color': '#008000', 'name': 'Completed', 'description': 'Order completed successfully'},
-                'collected': {'emoji': '📦', 'color': '#4B0082', 'name': 'Collected', 'description': 'Order has been collected'}
-            }
-            
-            current_status_info = status_config.get(current_status, status_config['pending'])
-            
-            # Display real-time status header
-            st.markdown(f"""
-            <div style="background-color: {current_status_info['color']}; color: white; padding: 2rem; border-radius: 15px; text-align: center; margin-bottom: 2rem;">
-                <h1 style="margin: 0; font-size: 2.5rem;">{current_status_info['emoji']}</h1>
-                <h2 style="margin: 10px 0; color: white;">{current_status_info['name']}</h2>
-                <p style="margin: 0; font-size: 1.2rem; opacity: 0.9;">{current_status_info['description']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Order details
-            st.subheader("📋 Order Details")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.write(f"**📄 Order ID:** {order[0]}")
-                st.write(f"**👤 Customer:** {order[2]}")
-                st.write(f"**🎯 Order Type:** {str(order[3]).title() if order[3] else 'N/A'}")
-                st.write(f"**💳 Payment:** {str(order[10]).title() if len(order) > 10 and order[10] else 'Cash'}")
-            with col2:
-                st.write(f"**💰 Total:** R {order[5]}")
-                st.write(f"**📅 Order Date:** {order[6]} SAST")
-                st.write(f"**📦 Items Ordered:** {order[11] if len(order) > 11 else '0'}")
-                if len(order) > 7 and order[7]:
-                    st.write(f"**📝 Notes:** {order[7]}")
-            
-            # Enhanced Real-time Progress Tracker
-            st.subheader("🔄 Order Progress")
-            
-            # Define status flow based on order type
-            if str(order[3]) == 'takeaway':
-                status_flow = ['pending', 'preparing', 'ready', 'collected']
-                status_names = ['Order Received', 'Preparing', 'Ready for Collection', 'Collected']
-            else:
-                status_flow = ['pending', 'preparing', 'ready', 'completed']
-                status_names = ['Order Received', 'Preparing', 'Ready', 'Completed']
-            
-            current_index = status_flow.index(current_status) if current_status in status_flow else 0
-            
-            # Progress bar with percentage
-            progress = current_index / (len(status_flow) - 1) if len(status_flow) > 1 else 0
-            st.progress(progress)
-            st.write(f"**📊 Progress: {int(progress * 100)}%**")
-            
-            # Visual status steps
-            cols = st.columns(len(status_flow))
-            
-            for i, (status, status_name) in enumerate(zip(status_flow, status_names)):
-                status_info = status_config.get(status, status_config['pending'])
-                
-                with cols[i]:
-                    if i < current_index:
-                        # Completed step
-                        st.markdown(f"""
-                        <div style="text-align: center; padding: 15px; background: #4CAF50; color: white; border-radius: 10px; margin: 5px;">
-                            <div style="font-size: 2rem;">✅</div>
-                            <strong>{status_name}</strong>
-                            <div style="font-size: 0.8rem; opacity: 0.9;">Completed</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    elif i == current_index:
-                        # Current step
-                        st.markdown(f"""
-                        <div style="text-align: center; padding: 15px; background: {status_info['color']}; color: white; border-radius: 10px; margin: 5px; border: 3px solid #FFD700;">
-                            <div style="font-size: 2rem;">{status_info['emoji']}</div>
-                            <strong>{status_name}</strong>
-                            <div style="font-size: 0.8rem; opacity: 0.9;">In Progress</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # Show estimated time for current step
-                        if status == 'preparing':
-                            st.info("⏱️ **Estimated time: 10-15 minutes**")
-                        elif status == 'ready':
-                            st.success("🎉 **Your order is ready!**")
-                            st.balloons()
-                    else:
-                        # Future step
-                        st.markdown(f"""
-                        <div style="text-align: center; padding: 15px; background: #f0f0f0; color: #666; border-radius: 10px; margin: 5px;">
-                            <div style="font-size: 2rem;">⏳</div>
-                            <strong>{status_name}</strong>
-                            <div style="font-size: 0.8rem; opacity: 0.9;">Upcoming</div>
-                        </div>
-                        """, unsafe_allow_html=True)
-            
-            # Order items with detailed information
-            st.subheader("🍽️ Your Order Items")
-            if order[11] and isinstance(order[11], str):
-                items = order[11].split(',')
-                for item in items:
-                    st.write(f"• {item.strip()}")
-            else:
-                st.write("No items found in this order")
-            
-            # Special collection button for takeaway
-            order_type = str(order[3]) if order[3] else 'dine-in'
-            if order_type == 'takeaway' and current_status == 'ready':
-                st.success("🎯 **Your order is ready for collection!**")
-                st.info("📍 Please come to the counter to collect your order")
-                
-                if st.button("📦 **I've Collected My Order**", type="primary", key="collect_btn"):
-                    try:
-                        db.update_order_status(order[0], 'collected', 'Customer collected order')
-                        st.success("🎉 Thank you! Order marked as collected. Enjoy your meal! 🍽️")
-                        time.sleep(2)
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"❌ Error updating order: {e}")
-            
-            # Auto-refresh for live updates
-            st.markdown("---")
-            refresh_container = st.container()
-            with refresh_container:
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.info("🔄 **Live Tracking Active** - Status updates automatically")
-                    st.write(f"**Last checked:** {get_sa_time().strftime('%H:%M:%S')} SAST")
-                with col2:
-                    if st.button("🔄 Refresh Now", key="refresh_btn"):
-                        st.rerun()
-            
-            # Auto-refresh every 3 seconds for real-time updates
-            time.sleep(3)
-            st.rerun()
-                
+        if not order:
+            st.error("❌ Could not load order details. Please try again.")
+            return
+        
+        # Status configuration
+        status_config = {
+            'pending': {'emoji': '⏳', 'color': '#FFA500', 'name': 'Order Received', 'description': 'We have received your order'},
+            'preparing': {'emoji': '👨‍🍳', 'color': '#1E90FF', 'name': 'Preparing', 'description': 'Our chefs are cooking your meal'},
+            'ready': {'emoji': '✅', 'color': '#32CD32', 'name': 'Ready', 'description': 'Your order is ready!'},
+            'completed': {'emoji': '🎉', 'color': '#008000', 'name': 'Completed', 'description': 'Order completed successfully'},
+            'collected': {'emoji': '📦', 'color': '#4B0082', 'name': 'Collected', 'description': 'Order has been collected'}
+        }
+        
+        current_status_info = status_config.get(current_status, status_config['pending'])
+        
+        # Display real-time status header
+        st.markdown(f"""
+        <div style="background-color: {current_status_info['color']}; color: white; padding: 2rem; border-radius: 15px; text-align: center; margin-bottom: 2rem;">
+            <h1 style="margin: 0; font-size: 2.5rem;">{current_status_info['emoji']}</h1>
+            <h2 style="margin: 10px 0; color: white;">{current_status_info['name']}</h2>
+            <p style="margin: 0; font-size: 1.2rem; opacity: 0.9;">{current_status_info['description']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Order details
+        st.subheader("📋 Order Details")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**📄 Order ID:** {order[0]}")
+            st.write(f"**👤 Customer:** {order[2]}")
+            st.write(f"**🎯 Order Type:** {str(order[3]).title()}")
+            st.write(f"**💳 Payment:** {str(order[10]).title()}")
+        with col2:
+            st.write(f"**💰 Total:** R {order[5]}")
+            st.write(f"**📅 Order Date:** {order[6]}")
+            st.write(f"**📦 Items Ordered:** {order[12] if len(order) > 12 else 'N/A'}")
+            if order[7]:  # notes
+                st.write(f"**📝 Notes:** {order[7]}")
+        
+        # Enhanced Real-time Progress Tracker
+        st.subheader("🔄 Order Progress")
+        
+        # Define status flow based on order type
+        if str(order[3]) == 'takeaway':
+            status_flow = ['pending', 'preparing', 'ready', 'collected']
+            status_names = ['Order Received', 'Preparing', 'Ready for Collection', 'Collected']
         else:
-            st.error("❌ Order not found. Please check your Order Token.")
-            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            status_flow = ['pending', 'preparing', 'ready', 'completed']
+            status_names = ['Order Received', 'Preparing', 'Ready', 'Completed']
+        
+        current_index = status_flow.index(current_status) if current_status in status_flow else 0
+        
+        # Progress bar with percentage
+        progress = current_index / (len(status_flow) - 1) if len(status_flow) > 1 else 0
+        st.progress(progress)
+        st.write(f"**📊 Progress: {int(progress * 100)}%**")
+        
+        # Visual status steps
+        cols = st.columns(len(status_flow))
+        
+        for i, (status, status_name) in enumerate(zip(status_flow, status_names)):
+            status_info = status_config.get(status, status_config['pending'])
+            
+            with cols[i]:
+                if i < current_index:
+                    # Completed step
+                    st.markdown(f"""
+                    <div style="text-align: center; padding: 15px; background: #4CAF50; color: white; border-radius: 10px; margin: 5px;">
+                        <div style="font-size: 2rem;">✅</div>
+                        <strong>{status_name}</strong>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">Completed</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif i == current_index:
+                    # Current step
+                    st.markdown(f"""
+                    <div style="text-align: center; padding: 15px; background: {status_info['color']}; color: white; border-radius: 10px; margin: 5px; border: 3px solid #FFD700;">
+                        <div style="font-size: 2rem;">{status_info['emoji']}</div>
+                        <strong>{status_name}</strong>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">In Progress</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Show estimated time for current step
+                    if status == 'preparing':
+                        st.info("⏱️ **Estimated time: 10-15 minutes**")
+                    elif status == 'ready':
+                        st.success("🎉 **Your order is ready!**")
+                        st.balloons()
+                else:
+                    # Future step
+                    st.markdown(f"""
+                    <div style="text-align: center; padding: 15px; background: #f0f0f0; color: #666; border-radius: 10px; margin: 5px;">
+                        <div style="font-size: 2rem;">⏳</div>
+                        <strong>{status_name}</strong>
+                        <div style="font-size: 0.8rem; opacity: 0.9;">Upcoming</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Order items with detailed information
+        st.subheader("🍽️ Your Order Items")
+        if order[11] and isinstance(order[11], str):
+            items = order[11].split(',')
+            for item in items:
+                st.write(f"• {item.strip()}")
+        else:
+            st.write("No items found in this order")
+        
+        # Special collection button for takeaway
+        order_type = str(order[3]) if order[3] else 'dine-in'
+        if order_type == 'takeaway' and current_status == 'ready':
+            st.success("🎯 **Your order is ready for collection!**")
+            st.info("📍 Please come to the counter to collect your order")
+            
+            if st.button("📦 **I've Collected My Order**", type="primary", key="collect_btn"):
+                try:
+                    db.update_order_status(order[0], 'collected', 'Customer collected order')
+                    st.success("🎉 Thank you! Order marked as collected. Enjoy your meal! 🍽️")
+                    time.sleep(2)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"❌ Error updating order: {e}")
+        
+        # Auto-refresh for live updates
+        st.markdown("---")
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            st.info("🔄 **Live Tracking Active** - Status updates automatically")
+            st.write(f"**Last checked:** {get_sa_time().strftime('%H:%M:%S')} SAST")
+        with col2:
+            if st.button("🔄 Refresh Now", key="refresh_btn"):
+                st.rerun()
+        
+        # Auto-refresh every 5 seconds for real-time updates
+        time.sleep(5)
+        st.rerun()
             
     except Exception as e:
         st.error(f"❌ Error tracking order: {e}")
