@@ -413,22 +413,26 @@ class RestaurantDB:
         cursor.execute(query)
         return cursor.fetchall()
     
-    def add_order(self, customer_name, order_type, items, table_number=None, notes="", payment_method="cash"):
-        cursor = self.conn.cursor()
-        total_amount = sum(item['price'] * item['quantity'] for item in items)
-        
-        # Generate unique order token
-        order_token = f"ORD{random.randint(1000, 9999)}{int(time.time()) % 10000}"
-        
-        # Use current South African timestamp for order date
-        current_time = get_sa_time().strftime('%Y-%m-%d %H:%M:%S')
-        
+def add_order(self, customer_name, order_type, items, table_number=None, notes="", payment_method="cash"):
+    cursor = self.conn.cursor()
+    total_amount = sum(item['price'] * item['quantity'] for item in items)
+    
+    # Generate unique order token
+    order_token = f"ORD{random.randint(1000, 9999)}{int(time.time()) % 10000}"
+    
+    # Use current South African timestamp for order date
+    current_time = get_sa_time().strftime('%Y-%m-%d %H:%M:%S')
+    
+    try:
         cursor.execute('''
             INSERT INTO orders (customer_name, order_type, table_number, total_amount, notes, order_token, order_date, payment_method)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (customer_name, order_type, table_number, total_amount, notes, order_token, current_time, payment_method))
         
         order_id = cursor.lastrowid
+        
+        # Debug: Show what we're inserting
+        st.success(f"✅ Debug: Creating order #{order_id} with token: {order_token}")
         
         for item in items:
             cursor.execute('''
@@ -443,7 +447,21 @@ class RestaurantDB:
         ''', (order_id, 'pending', 'Order placed by customer'))
         
         self.conn.commit()
+        
+        # Verify the order was created
+        cursor.execute('SELECT order_token FROM orders WHERE id = ?', (order_id,))
+        verify_token = cursor.fetchone()
+        if verify_token:
+            st.success(f"✅ Debug: Order verified - token in database: {verify_token[0]}")
+        else:
+            st.error("❌ Debug: Order verification failed!")
+        
         return order_id, order_token
+        
+    except Exception as e:
+        st.error(f"❌ Debug: Error in add_order: {e}")
+        self.conn.rollback()
+        raise e
     
     def update_order_status(self, order_id, new_status, notes=""):
         cursor = self.conn.cursor()
@@ -459,19 +477,62 @@ class RestaurantDB:
         self.conn.commit()
         return True
     
-    def get_order_by_token(self, order_token):
-        cursor = self.conn.cursor()
+def get_order_by_token(self, order_token):
+    """FIXED VERSION: Get order details by token with proper error handling"""
+    cursor = self.conn.cursor()
+    
+    # First, let's check if the order exists at all
+    cursor.execute('SELECT id FROM orders WHERE order_token = ?', (order_token,))
+    order_exists = cursor.fetchone()
+    
+    if not order_exists:
+        st.error(f"❌ Debug: No order found with token: {order_token}")
+        # Let's see what tokens exist for debugging
+        cursor.execute('SELECT order_token FROM orders ORDER BY id DESC LIMIT 5')
+        recent_tokens = cursor.fetchall()
+        if recent_tokens:
+            st.info(f"🔍 Recent order tokens in system: {[token[0] for token in recent_tokens]}")
+        return None
+    
+    # Now get the full order details with a simpler query
+    try:
         cursor.execute('''
             SELECT o.*, 
-                   GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') as items,
-                   COUNT(oi.id) as item_count,
-                   o.notes as order_notes
+                   (SELECT GROUP_CONCAT(oi.menu_item_name || ' (x' || oi.quantity || ')', ', ') 
+                    FROM order_items oi 
+                    WHERE oi.order_id = o.id) as items,
+                   (SELECT COUNT(*) FROM order_items oi WHERE oi.order_id = o.id) as item_count
             FROM orders o
-            LEFT JOIN order_items oi ON o.id = oi.order_id
             WHERE o.order_token = ?
-            GROUP BY o.id
         ''', (order_token,))
         result = cursor.fetchone()
+        
+        if result:
+            st.success(f"✅ Debug: Found order with token {order_token}")
+            return result
+        else:
+            st.error(f"❌ Debug: Query returned no results for token: {order_token}")
+            return None
+            
+    except Exception as e:
+        st.error(f"❌ Debug: Error in get_order_by_token: {e}")
+        # Fallback to simple order query
+        try:
+            cursor.execute('SELECT * FROM orders WHERE order_token = ?', (order_token,))
+            simple_result = cursor.fetchone()
+            if simple_result:
+                st.info("ℹ️ Debug: Using simple query - order found but item details missing")
+                # Add placeholder for items and item_count
+                if simple_result:
+                    simple_result = list(simple_result)
+                    simple_result.append("Items details unavailable")  # items
+                    simple_result.append(0)  # item_count
+                    simple_result.append(simple_result[8] if len(simple_result) > 8 else "")  # order_notes
+                return tuple(simple_result) if simple_result else None
+            return None
+        except Exception as e2:
+            st.error(f"❌ Debug: Fallback query also failed: {e2}")
+            return None
         
         # Debug: Check what's being returned
         if result:
@@ -491,14 +552,20 @@ class RestaurantDB:
         ''', (order_id,))
         return cursor.fetchall()
     
-    def get_order_status(self, order_token):
-        """Get just the current status of an order for live updates"""
-        cursor = self.conn.cursor()
-        cursor.execute('''
-            SELECT status FROM orders WHERE order_token = ?
-        ''', (order_token,))
+def get_order_status(self, order_token):
+    """Get just the current status of an order for live updates"""
+    cursor = self.conn.cursor()
+    try:
+        cursor.execute('SELECT status FROM orders WHERE order_token = ?', (order_token,))
         result = cursor.fetchone()
-        return result[0] if result else None
+        if result:
+            return result[0]
+        else:
+            st.error(f"❌ Debug: No status found for token: {order_token}")
+            return None
+    except Exception as e:
+        st.error(f"❌ Debug: Error in get_order_status: {e}")
+        return None
 
 # Initialize database with forced reset
 try:
@@ -1082,29 +1149,37 @@ def track_order():
                 st.error("❌ Please enter your order token")
 
 def display_order_tracking(order_token):
+    """FIXED VERSION: Display order tracking with proper error handling"""
+    st.info(f"🔍 Attempting to track order with token: {order_token}")
+    
     try:
         # Get current order status for live updates
         current_status = db.get_order_status(order_token)
+        
+        if not current_status:
+            st.error(f"❌ Order not found. Please check your Order Token: {order_token}")
+            
+            # Show available orders for debugging
+            try:
+                cursor = db.conn.cursor()
+                cursor.execute('SELECT id, order_token, customer_name FROM orders ORDER BY id DESC LIMIT 5')
+                recent_orders = cursor.fetchall()
+                if recent_orders:
+                    st.info("🔍 Recent orders in system (for debugging):")
+                    for order in recent_orders:
+                        st.write(f"- Order #{order[0]}: {order[2]} (Token: {order[1]})")
+                else:
+                    st.info("🔍 No orders found in system")
+            except Exception as debug_e:
+                st.error(f"❌ Debug error: {debug_e}")
+                
+            return
         
         # If order is collected/completed, show completion message and stop tracking
         if current_status in ['completed', 'collected']:
             st.success("🎉 **Your order has been completed! Thank you for dining with us!**")
             st.balloons()
             st.info("💫 We hope you enjoyed your meal!")
-            return
-        
-        if not current_status:
-            st.error("❌ Order not found. Please check your Order Token.")
-            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
-            # Show recent orders for debugging
-            try:
-                recent_orders = db.get_recent_orders(5)
-                if recent_orders:
-                    st.info("🔍 Recent orders in system:")
-                    for order in recent_orders:
-                        st.write(f"- Order #{order[0]}: {order[2]} (Token: {order[9]})")
-            except:
-                pass
             return
         
         # Update session state with current status for comparison
@@ -1118,6 +1193,8 @@ def display_order_tracking(order_token):
         order = db.get_order_by_token(order_token)
         
         if order:
+            st.success(f"✅ Successfully loaded order details for token: {order_token}")
+            
             # Status configuration
             status_config = {
                 'pending': {'emoji': '⏳', 'color': '#FFA500', 'name': 'Order Received', 'description': 'We have received your order'},
@@ -1138,18 +1215,21 @@ def display_order_tracking(order_token):
             </div>
             """, unsafe_allow_html=True)
             
-            # Order details
+            # Order details - using safe indexing
             st.subheader("📋 Order Details")
             col1, col2 = st.columns(2)
             with col1:
                 st.write(f"**📄 Order ID:** {order[0]}")
                 st.write(f"**👤 Customer:** {order[2]}")
                 st.write(f"**🎯 Order Type:** {str(order[4]).title() if order[4] else 'N/A'}")
-                st.write(f"**💳 Payment:** {str(order[10]).title() if len(order) > 10 and order[10] else 'Cash'}")
+                if len(order) > 10:
+                    st.write(f"**💳 Payment:** {str(order[10]).title() if order[10] else 'Cash'}")
+            
             with col2:
                 st.write(f"**💰 Total:** R {order[6]}")
                 st.write(f"**📅 Order Date:** {order[7]} SAST")
-                st.write(f"**📦 Items Ordered:** {order[11] if len(order) > 11 else '0'}")
+                if len(order) > 11:
+                    st.write(f"**📦 Items Ordered:** {order[11]}")
                 if len(order) > 9 and order[9]:
                     st.write(f"**📝 Notes:** {order[9]}")
             
@@ -1157,7 +1237,8 @@ def display_order_tracking(order_token):
             st.subheader("🔄 Order Progress")
             
             # Define status flow based on order type
-            if str(order[4]) == 'takeaway':
+            order_type = str(order[4]) if order[4] else 'dine-in'
+            if order_type == 'takeaway':
                 status_flow = ['pending', 'preparing', 'ready', 'collected']
                 status_names = ['Order Received', 'Preparing', 'Ready for Collection', 'Collected']
             else:
@@ -1215,15 +1296,14 @@ def display_order_tracking(order_token):
             
             # Order items with detailed information
             st.subheader("🍽️ Your Order Items")
-            if order[8] and isinstance(order[8], str):
+            if len(order) > 8 and order[8] and isinstance(order[8], str):
                 items = order[8].split(',')
                 for item in items:
                     st.write(f"• {item.strip()}")
             else:
-                st.write("No items found in this order")
+                st.info("📝 Order items details loading...")
             
             # Special collection button for takeaway
-            order_type = str(order[4]) if order[4] else 'dine-in'
             if order_type == 'takeaway' and current_status == 'ready':
                 st.success("🎯 **Your order is ready for collection!**")
                 st.info("📍 Please come to the counter to collect your order")
@@ -1254,8 +1334,7 @@ def display_order_tracking(order_token):
             st.rerun()
                 
         else:
-            st.error("❌ Order not found. Please check your Order Token.")
-            st.info("💡 Make sure you entered the correct Order Token from your order confirmation.")
+            st.error("❌ Could not load order details. Please try again.")
             
     except Exception as e:
         st.error(f"❌ Error tracking order: {e}")
