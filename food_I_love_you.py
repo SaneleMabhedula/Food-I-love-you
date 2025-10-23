@@ -193,7 +193,7 @@ class RestaurantDB:
         
         # Insert sample staff
         staff_users = [
-            ('chef', 'chef@2025', 'chef2025'),
+            ('chef2025', 'chef@2025', 'chef2025'),
             ('manager', 'manager123', 'manager'),
             ('staff', 'staff123', 'staff')
         ]
