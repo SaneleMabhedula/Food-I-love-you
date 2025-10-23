@@ -15,6 +15,8 @@ import base64
 import pytz
 import os
 
+st.set_page_config(layout="wide")
+
 # Set South African timezone
 SA_TIMEZONE = pytz.timezone('Africa/Johannesburg')
 
@@ -1258,11 +1260,25 @@ def show_menu_selection():
                 
                 # Food image
                 try:
-                    st.image(item['image_url'], use_container_width=True, caption=item['name'])
+                    img_path = item['image_url']
+                    if isinstance(img_path, str) and os.path.exists(img_path):
+                        with open(img_path, 'rb') as f:
+                            data = base64.b64encode(f.read()).decode('utf-8')
+                        st.markdown(
+                            f"""
+                            <div style="width:100%; height:220px; border-radius:15px; overflow:hidden;">
+                                <img src="data:image/jpeg;base64,{data}" style="width:100%; height:100%; object-fit:cover; display:block;" />
+                            </div>
+                            <div style="color:#aaa; margin-top:6px;">{item['name']}</div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.image(img_path, use_container_width=True, caption=item['name'])
                 except:
                     st.markdown(f'''
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                border-radius: 15px; height: 200px; display: flex; align-items: center; justify-content: center; color: white;">
+                                border-radius: 15px; height: 220px; display: flex; align-items: center; justify-content: center; color: white;">
                         <div style="text-align: center;">
                             <div style="font-size: 3rem;">🍽️</div>
                             <h3 style="color: white;">{item['name']}</h3>
