@@ -4,3 +4,4 @@ plotly
 qrcode[pil]
 Pillow
 numpy
+streamlit-js-eval

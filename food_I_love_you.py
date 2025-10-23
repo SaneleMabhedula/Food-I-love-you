@@ -14,6 +14,10 @@ from io import BytesIO
 import base64
 import pytz
 import os
+try:
+    from streamlit_js_eval import get_window_size
+except Exception:
+    get_window_size = None
 
 st.set_page_config(layout="wide")
 
@@ -23,6 +27,22 @@ SA_TIMEZONE = pytz.timezone('Africa/Johannesburg')
 def get_sa_time():
     """Get current South African time"""
     return datetime.now(SA_TIMEZONE)
+
+def get_device_type():
+    try:
+        if get_window_size is None:
+            return 'desktop'
+        size = get_window_size()
+        if not size or 'width' not in size:
+            return 'desktop'
+        w = int(size['width'])
+        if w < 768:
+            return 'mobile'
+        if w < 1200:
+            return 'tablet'
+        return 'desktop'
+    except Exception:
+        return 'desktop'
 
 # Enhanced Database Class with Analytics Support
 class RestaurantDB:
@@ -258,7 +278,7 @@ class RestaurantDB:
             menu_items = [
                 # BEVERAGES
                 ('Bottled Water', 'Still bottled water', 15, 'Beverage', 'bottled_water.jpg', 5, 0),
-                ('Iced Coffee', 'Chilled coffee over ice', 35, 'Beverage', 'ice_coffee.jpg', 12, 0),
+                ('Iced Coffee', 'Chilled coffee over ice', 35, 'Beverage', 'iced_coffee.jpg', 12, 0),
                 
                 # APPETIZERS
                 ('Garlic Bread', 'Toasted bread with garlic butter', 25, 'Starter', 'garlic_bread.jpg', 10, 0),
@@ -1251,10 +1271,15 @@ def show_menu_selection():
         st.warning("No menu items found. The database may not be properly initialized.")
         return
     
+    # Determine device layout
+    device = st.session_state.get('device_type') or get_device_type()
+    st.session_state.device_type = device
+    cols_count = 1 if device == 'mobile' else (2 if device == 'tablet' else 3)
+    image_height = 180 if device == 'mobile' else (220 if device == 'tablet' else 260)
     # Display menu items in a grid
-    cols = st.columns(2)
+    cols = st.columns(cols_count)
     for idx, item in enumerate(menu_items):
-        with cols[idx % 2]:
+        with cols[idx % cols_count]:
             with st.container():
                 st.markdown(f'<div class="menu-item-card">', unsafe_allow_html=True)
                 
@@ -1266,7 +1291,7 @@ def show_menu_selection():
                             data = base64.b64encode(f.read()).decode('utf-8')
                         st.markdown(
                             f"""
-                            <div style="width:100%; height:220px; border-radius:15px; overflow:hidden;">
+                            <div style="width:100%; height:{image_height}px; border-radius:15px; overflow:hidden;">
                                 <img src="data:image/jpeg;base64,{data}" style="width:100%; height:100%; object-fit:cover; display:block;" />
                             </div>
                             <div style="color:#aaa; margin-top:6px;">{item['name']}</div>
@@ -1278,7 +1303,7 @@ def show_menu_selection():
                 except:
                     st.markdown(f'''
                     <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-                                border-radius: 15px; height: 220px; display: flex; align-items: center; justify-content: center; color: white;">
+                                border-radius: 15px; height: {image_height}px; display: flex; align-items: center; justify-content: center; color: white;">
                         <div style="text-align: center;">
                             <div style="font-size: 3rem;">🍽️</div>
                             <h3 style="color: white;">{item['name']}</h3>
