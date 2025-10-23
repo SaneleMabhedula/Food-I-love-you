@@ -66,11 +66,10 @@ class RestaurantDB:
                 
                 # Update existing menu items with realistic cost prices
                 cost_prices = {
-                    'Cappuccino': 12, 'Mango Smoothie': 15, 'Sparkling Lemonade': 8,
-                    'Truffle Arancini': 25, 'Burrata Caprese': 35, 'Crispy Calamari': 28,
-                    'Wagyu Beef Burger': 65, 'Lobster Pasta': 85, 'Herb-Crusted Salmon': 55,
-                    'Truffle Mushroom Risotto': 35, 'Chocolate Lava Cake': 18,
-                    'Berry Panna Cotta': 15, 'Tiramisu': 16
+                    'Bottled Water': 5, 'Garlic Bread': 10, 'Onion Rings': 12,
+                    'Beef Steak': 90, 'Chicken Burger': 50, 'Grilled Chicken': 70,
+                    'Grilled Fish': 75,
+                    'Iced Coffee': 12, 'Chocolate Cake': 18, 'Ice Cream': 10, 'Apple Pie': 16
                 }
                 
                 for item_name, cost in cost_prices.items():
@@ -78,6 +77,49 @@ class RestaurantDB:
             
             self.conn.commit()
             
+            # Synchronize menu items to the new default set
+            try:
+                desired_menu_items = [
+                    # BEVERAGES
+                    ('Bottled Water', 'Still bottled water', 15, 'Beverage', 'bottled_water.jpg', 5, 0),
+                    ('Iced Coffee', 'Chilled coffee over ice', 35, 'Beverage', 'iced_coffee.jpg', 12, 0),
+                    
+                    # APPETIZERS
+                    ('Garlic Bread', 'Toasted bread with garlic butter', 25, 'Starter', 'garlic_bread.jpg', 10, 0),
+                    ('Onion Rings', 'Crispy fried onion rings', 30, 'Starter', 'onion_rings.jpg', 12, 0),
+                    
+                    # MAIN COURSES
+                    ('Beef Steak', 'Grilled beef steak', 150, 'Main Course', 'beef_steak.jpg', 90, 0),
+                    ('Chicken Burger', 'Chicken burger with fresh garnish', 85, 'Main Course', 'chicken_burger.jpg', 50, 0),
+                    ('Grilled Chicken', 'Tender grilled chicken', 120, 'Main Course', 'grilled_chicken.jpg', 70, 0),
+                    ('Grilled Fish', 'Seasoned grilled fish', 130, 'Main Course', 'grilled_fish.jpg', 75, 0)
+                    ,
+                    
+                    # DESSERTS
+                    ('Chocolate Cake', 'Rich slice of chocolate cake', 55, 'Dessert', 'chocolate_cake.jpg', 18, 0),
+                    ('Ice Cream', 'Scoop of vanilla ice cream', 30, 'Dessert', 'ice_cream.jpg', 10, 0),
+                    ('Apple Pie', 'Warm apple pie slice', 45, 'Dessert', 'apple_pie.jpg', 16, 0)
+                ]
+                desired_names = set([i[0] for i in desired_menu_items])
+                cursor = self.conn.cursor()
+                # First, mark all existing items as unavailable to avoid FK issues
+                cursor.execute('UPDATE menu_items SET available = 0')
+                # Upsert desired items: update if exists by name, else insert
+                for name, desc, price, category, img, cost, pop in desired_menu_items:
+                    cursor.execute('''
+                        UPDATE menu_items
+                        SET description = ?, price = ?, category = ?, image_url = ?, cost_price = ?, popularity_score = ?, available = 1
+                        WHERE name = ?
+                    ''', (desc, price, category, img, cost, pop, name))
+                    if cursor.rowcount == 0:
+                        cursor.execute('''
+                            INSERT INTO menu_items (name, description, price, category, image_url, cost_price, popularity_score, available)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, 1)
+                        ''', (name, desc, price, category, img, cost, pop))
+                self.conn.commit()
+            except Exception as e:
+                st.error(f" Error synchronizing menu items: {e}")
+        
         except Exception as e:
             st.error(f"Database migration error: {e}")
 
@@ -213,38 +255,23 @@ class RestaurantDB:
             # Premium menu with cost prices and initial popularity
             menu_items = [
                 # BEVERAGES
-                ('Cappuccino', 'Freshly brewed coffee with steamed milk foam', 45, 'Beverage', 
-                 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=500&h=300&fit=crop', 12, 85),
-                ('Mango Smoothie', 'Fresh mango blended with yogurt and honey', 55, 'Beverage', 
-                 'https://images.unsplash.com/photo-1628991839433-31cc35f5c36a?w=500&h=300&fit=crop', 15, 92),
-                ('Sparkling Lemonade', 'House-made lemonade with mint and berries', 42, 'Beverage', 
-                 'https://images.unsplash.com/photo-1621506289937-a8e4df240d0b?w=500&h=300&fit=crop', 8, 78),
+                ('Bottled Water', 'Still bottled water', 15, 'Beverage', 'bottled_water.jpg', 5, 0),
+                ('Iced Coffee', 'Chilled coffee over ice', 35, 'Beverage', 'ice_coffee.jpg', 12, 0),
                 
                 # APPETIZERS
-                ('Truffle Arancini', 'Crispy risotto balls with truffle aioli', 89, 'Starter', 
-                 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?w=500&h=300&fit=crop', 25, 88),
-                ('Burrata Caprese', 'Fresh burrata with heirloom tomatoes and basil', 125, 'Starter', 
-                 'https://images.unsplash.com/photo-1592417817098-8fd3d9eb14a5?w=500&h=300&fit=crop', 35, 91),
-                ('Crispy Calamari', 'Lightly fried squid with lemon garlic aioli', 95, 'Starter', 
-                 'https://images.unsplash.com/photo-1553621042-f6e147245754?w=500&h=300&fit=crop', 28, 84),
+                ('Garlic Bread', 'Toasted bread with garlic butter', 25, 'Starter', 'garlic_bread.jpg', 10, 0),
+                ('Onion Rings', 'Crispy fried onion rings', 30, 'Starter', 'onion_rings.jpg', 12, 0),
                 
                 # MAIN COURSES
-                ('Wagyu Beef Burger', 'Premium wagyu patty with truffle cheese', 185, 'Main Course', 
-                 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=500&h=300&fit=crop', 65, 95),
-                ('Lobster Pasta', 'Fresh lobster with handmade tagliatelle', 245, 'Main Course', 
-                 'https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=500&h=300&fit=crop', 85, 89),
-                ('Herb-Crusted Salmon', 'Atlantic salmon with lemon butter sauce', 195, 'Main Course', 
-                 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=500&h=300&fit=crop', 55, 87),
-                ('Truffle Mushroom Risotto', 'Arborio rice with wild mushrooms', 165, 'Main Course', 
-                 'https://images.unsplash.com/photo-1476124369491-e7addf5db371?w=500&h=300&fit=crop', 35, 82),
+                ('Beef Steak', 'Grilled beef steak', 150, 'Main Course', 'beef_steak.jpg', 90, 0),
+                ('Chicken Burger', 'Chicken burger with fresh garnish', 85, 'Main Course', 'chicken_burger.jpg', 50, 0),
+                ('Grilled Chicken', 'Tender grilled chicken', 120, 'Main Course', 'grilled_chicken.jpg', 70, 0),
+                ('Grilled Fish', 'Seasoned grilled fish', 130, 'Main Course', 'grilled_fish.jpg', 75, 0),
                 
                 # DESSERTS
-                ('Chocolate Lava Cake', 'Warm chocolate cake with melting center', 85, 'Dessert', 
-                 'https://images.unsplash.com/photo-1624353365286-3f8d62daad51?w=500&h=300&fit=crop', 18, 96),
-                ('Berry Panna Cotta', 'Vanilla panna cotta with mixed berry compote', 75, 'Dessert', 
-                 'https://images.unsplash.com/photo-1551024506-0bccd828d307?w=500&h=300&fit=crop', 15, 83),
-                ('Tiramisu', 'Classic Italian dessert with espresso', 79, 'Dessert', 
-                 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=500&h=300&fit=crop', 16, 90)
+                ('Chocolate Cake', 'Rich slice of chocolate cake', 55, 'Dessert', 'chocolate_cake.jpg', 18, 0),
+                ('Ice Cream', 'Scoop of vanilla ice cream', 30, 'Dessert', 'ice_cream.jpg', 10, 0),
+                ('Apple Pie', 'Warm apple pie slice', 45, 'Dessert', 'apple_pie.jpg', 16, 0)
             ]
             
             for item in menu_items:
