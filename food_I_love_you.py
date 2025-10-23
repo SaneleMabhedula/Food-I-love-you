@@ -111,10 +111,10 @@ class RestaurantDB:
                     ('Onion Rings', 'Crispy fried onion rings', 30, 'Starter', 'onion_rings.jpg', 12, 0),
                     
                     # MAIN COURSES
-                    ('Beef Steak', 'Grilled beef steak', 150, 'Main Course', 'beef_steak.jpg', 90, 0),
-                    ('Chicken Burger', 'Chicken burger with fresh garnish', 85, 'Main Course', 'chicken_burger.jpg', 50, 0),
-                    ('Grilled Chicken', 'Tender grilled chicken', 120, 'Main Course', 'grilled_chicken.jpg', 70, 0),
-                    ('Grilled Fish', 'Seasoned grilled fish', 130, 'Main Course', 'grilled_fish.jpg', 75, 0)
+                    ('Beef Steak', 'Grilled beef steak', 100, 'Main Course', 'beef_steak.jpg', 90, 0),
+                    ('Chicken Burger', 'Chicken burger with fresh garnish', 40, 'Main Course', 'chicken_burger.jpg', 50, 0),
+                    ('Grilled Chicken', 'Tender grilled chicken', 60, 'Main Course', 'grilled_chicken.jpg', 70, 0),
+                    ('Grilled Fish', 'Seasoned grilled fish', 70, 'Main Course', 'grilled_fish.jpg', 75, 0)
                     ,
                     
                     # DESSERTS
