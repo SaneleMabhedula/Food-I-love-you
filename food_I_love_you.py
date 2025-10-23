@@ -1644,7 +1644,7 @@ def kitchen_dashboard():
     
     st.markdown("""
     <div class="main-header">
-        <h1 style="font-size: 3rem; margin-bottom: 1rem;">👨‍🍳 Chef's Command Center</h1>
+        <h1 style="font-size: 3rem; margin-bottom: 1rem;"> Chef's Command Center</h1>
         <p style="font-size: 1.2rem; opacity: 0.9;">Real-time Order Management • Premium Kitchen Operations</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1729,7 +1729,7 @@ def display_kitchen_orders(orders, status):
     filtered_orders = [order for order in orders if order['status'] == status]
     
     if not filtered_orders:
-        st.info(f"🎉 No {status} orders - Kitchen is clear!")
+        st.info(f" No {status} orders - Kitchen is clear!")
         return
     
     for order in filtered_orders:
@@ -2964,7 +2964,7 @@ def staff_navigation():
                           [" Kitchen Dashboard", " Advanced Analytics", " QR Codes"])
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🚀 Quick Actions")
+    st.sidebar.markdown("###  Quick Actions")
     
     if st.sidebar.button("🔄 Refresh All Data", use_container_width=True):
         st.rerun()
@@ -3008,7 +3008,7 @@ def landing_page():
     # Restaurant Showcase
     st.markdown("""
     <div style="text-align: center; margin: 3rem 0;">
-        <h2 style="color: #2E86AB; margin-bottom: 1rem;">🏰 Our Premium Venues</h2>
+        <h2 style="color: #2E86AB; margin-bottom: 1rem;"> Our Premium Venues</h2>
         <p style="color: #666; font-size: 1.1rem;">Experience luxury across our exquisite locations</p>
     </div>
     """, unsafe_allow_html=True)
@@ -3038,7 +3038,7 @@ def landing_page():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; margin: 3rem 0;">
-        <h2 style="color: #2E86AB; margin-bottom: 1rem;">🌟 Why Choose Sanele Delights?</h2>
+        <h2 style="color: #2E86AB; margin-bottom: 1rem;"> Why Choose Sanele Delights?</h2>
         <p style="color: #666; font-size: 1.1rem;">Unparalleled dining experiences crafted with passion</p>
     </div>
     """, unsafe_allow_html=True)
@@ -3076,7 +3076,7 @@ def landing_page():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; margin: 3rem 0;">
-        <h2 style="color: #2E86AB; margin-bottom: 1rem;">🚀 Your Culinary Journey</h2>
+        <h2 style="color: #2E86AB; margin-bottom: 1rem;"> Your Culinary Journey</h2>
         <p style="color: #666; font-size: 1.1rem;">Experience the future of fine dining in four simple steps</p>
     </div>
     """, unsafe_allow_html=True)
@@ -3116,7 +3116,7 @@ def landing_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("**🎯 Start Your Order**", type="primary", use_container_width=True):
+        if st.button("**Start Your Order**", type="primary", use_container_width=True):
             st.session_state.page = "customer"
             st.rerun()
     
