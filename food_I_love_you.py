@@ -32,7 +32,7 @@ class RestaurantDB:
             self.create_tables()
             self.migrate_database()
         except Exception as e:
-            st.error(f"❌ Database connection failed: {e}")
+            st.error(f" Database connection failed: {e}")
             raise e
     
     def migrate_database(self):
@@ -79,7 +79,7 @@ class RestaurantDB:
             self.conn.commit()
             
         except Exception as e:
-            st.error(f"❌ Database migration error: {e}")
+            st.error(f"Database migration error: {e}")
 
     def create_tables(self):
         cursor = self.conn.cursor()
@@ -318,7 +318,7 @@ class RestaurantDB:
             
         except Exception as e:
             self.conn.rollback()
-            st.error(f"❌ Database error in add_order: {str(e)}")
+            st.error(f"Database error in add_order: {str(e)}")
             raise e
 
     def update_customer_analytics(self, customer_name, order_amount):
@@ -362,7 +362,7 @@ class RestaurantDB:
             self.conn.commit()
             
         except Exception as e:
-            st.error(f"❌ Error updating customer analytics: {e}")
+            st.error(f" Error updating customer analytics: {e}")
 
     def update_menu_item_popularity(self, menu_item_id):
         """Update popularity score for menu items"""
@@ -457,7 +457,7 @@ class RestaurantDB:
             self.conn.commit()
             return True
         except Exception as e:
-            st.error(f"❌ Error updating order status: {str(e)}")
+            st.error(f" Error updating order status: {str(e)}")
             return False
 
     def get_active_orders(self):
@@ -475,7 +475,7 @@ class RestaurantDB:
             ''')
             return cursor.fetchall()
         except Exception as e:
-            st.error(f"❌ Error getting active orders: {str(e)}")
+            st.error(f" Error getting active orders: {str(e)}")
             return []
 
     def get_menu_items(self, category=None):
@@ -489,7 +489,7 @@ class RestaurantDB:
                 cursor.execute(query)
             return cursor.fetchall()
         except Exception as e:
-            st.error(f"❌ Error getting menu items: {str(e)}")
+            st.error(f" Error getting menu items: {str(e)}")
             return []
 
     def get_all_orders_for_debug(self):
@@ -589,7 +589,7 @@ class RestaurantDB:
             }
             
         except Exception as e:
-            st.error(f"❌ Error getting sales analytics: {e}")
+            st.error(f"Error getting sales analytics: {e}")
             return None
 
     def get_financial_metrics(self, days=30):
@@ -663,7 +663,7 @@ class RestaurantDB:
             }
             
         except Exception as e:
-            st.error(f"❌ Error getting financial metrics: {e}")
+            st.error(f"Error getting financial metrics: {e}")
             return None
 
     def get_customer_insights(self):
@@ -732,7 +732,7 @@ class RestaurantDB:
             }
             
         except Exception as e:
-            st.error(f"❌ Error getting customer insights: {e}")
+            st.error(f"Error getting customer insights: {e}")
             return None
 
     def get_popular_menu_items(self, days=30):
@@ -762,7 +762,7 @@ class RestaurantDB:
             return cursor.fetchall()
             
         except Exception as e:
-            st.error(f"❌ Error getting popular menu items: {e}")
+            st.error(f" Error getting popular menu items: {e}")
             return []
 
     def get_orders_completed_today(self):
@@ -777,7 +777,7 @@ class RestaurantDB:
             result = cursor.fetchone()
             return result[0] if result and result[0] is not None else 0
         except Exception as e:
-            st.error(f"❌ Error getting completed orders: {e}")
+            st.error(f"Error getting completed orders: {e}")
             return 0
 
     def get_average_preparation_time(self):
@@ -792,7 +792,7 @@ class RestaurantDB:
             result = cursor.fetchone()
             return float(result[0]) if result and result[0] is not None else 15.0  # Default to 15 minutes
         except Exception as e:
-            st.error(f"❌ Error getting average prep time: {e}")
+            st.error(f"Error getting average prep time: {e}")
             return 15.0
 
 # Initialize database
@@ -801,7 +801,7 @@ def initialize_database():
         db = RestaurantDB()
         return db
     except Exception as e:
-        st.error(f"❌ Database initialization error: {e}")
+        st.error(f"Database initialization error: {e}")
         return None
 
 # Global database instance
@@ -819,11 +819,11 @@ def generate_qr_code(url):
 
 # Authentication System
 def staff_login():
-    st.sidebar.title("🔐 Staff Portal")
-    username = st.sidebar.text_input("👤 Username")
-    password = st.sidebar.text_input("🔒 Password", type="password")
+    st.sidebar.title("Staff Portal")
+    username = st.sidebar.text_input("Username")
+    password = st.sidebar.text_input("Password", type="password")
     
-    if st.sidebar.button("🚀 Login", use_container_width=True):
+    if st.sidebar.button("Login", use_container_width=True):
         if username and password:
             if db is None:
                 st.sidebar.error(" Database not available")
@@ -1065,7 +1065,7 @@ def load_css():
 # Enhanced Customer Ordering Interface
 def customer_ordering():
     if db is None:
-        st.error("❌ Database not available. Please restart the application.")
+        st.error("Database not available. Please restart the application.")
         return
         
     load_css()
@@ -1330,7 +1330,7 @@ def show_order_confirmation():
     """, unsafe_allow_html=True)
     
     if not st.session_state.cart:
-        st.error("❌ Your cart is empty. Please add items before placing an order.")
+        st.error(" Your cart is empty. Please add items before placing an order.")
         if st.button("← Back to Menu"):
             st.session_state.current_step = "menu"
             st.rerun()
@@ -1406,10 +1406,10 @@ def show_order_confirmation():
                     time.sleep(2)
                     st.rerun()
                 else:
-                    st.error("❌ Failed to create order. Please try again.")
+                    st.error(" Failed to create order. Please try again.")
                 
             except Exception as e:
-                st.error(f"❌ Error placing order: {e}")
+                st.error(f" Error placing order: {e}")
                 st.error("Please try again or contact our concierge for assistance.")
 
 def track_order():
@@ -1448,9 +1448,9 @@ def track_order():
                     if order_token.startswith("ORD") and len(order_token) > 3:
                         display_order_tracking(order_token)
                     else:
-                        st.error("❌ Invalid Order Token format. It should start with 'ORD' followed by numbers.")
+                        st.error(" Invalid Order Token format. It should start with 'ORD' followed by numbers.")
                 else:
-                    st.error("❌ Please enter your order token")
+                    st.error(" Please enter your order token")
         
         with col2:
             if st.button("**🔄 Demo Order**", use_container_width=True):
@@ -1472,12 +1472,12 @@ def track_order():
                     st.success(f"🎉 Demo order created! Token: {demo_order_token}")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"❌ Error creating demo order: {e}")
+                    st.error(f" Error creating demo order: {e}")
 
 def display_order_tracking(order_token):
     """Enhanced order tracking with beautiful UI"""
     if db is None:
-        st.error("❌ Database not available")
+        st.error(" Database not available")
         return
         
     st.info(f"🔍 Tracking order with token: **{order_token}**")
@@ -1486,23 +1486,23 @@ def display_order_tracking(order_token):
     current_status = db.get_order_status(order_token)
     
     if current_status is None:
-        st.error(f"❌ Order not found with token: {order_token}")
+        st.error(f" Order not found with token: {order_token}")
         return
     
     # Get full order details
     order = db.get_order_by_token(order_token)
     
     if not order:
-        st.error("❌ Could not load order details")
+        st.error(" Could not load order details")
         return
     
-    # Status configuration with beautiful styling
+    # Status configuration with beautiful styling #Bring emoji later🙌
     status_config = {
-        'pending': {'emoji': '⏳', 'color': '#FF6B35', 'name': 'Order Received', 'description': 'We have received your order and our chefs are preparing'},
-        'preparing': {'emoji': '👨‍🍳', 'color': '#2E86AB', 'name': 'In Preparation', 'description': 'Our master chefs are crafting your culinary experience'},
-        'ready': {'emoji': '✅', 'color': '#28A745', 'name': 'Ready for Service', 'description': 'Your gourmet meal is ready! Get ready to indulge'},
-        'completed': {'emoji': '🎉', 'color': '#008000', 'name': 'Experience Complete', 'description': 'Thank you for dining with us! We hope you enjoyed'},
-        'collected': {'emoji': '📦', 'color': '#4B0082', 'name': 'Order Collected', 'description': 'Your takeaway order has been collected'}
+        'pending': { 'color': '#FF6B35', 'name': 'Order Received', 'description': 'We have received your order and our chefs are preparing'},
+        'preparing': {'color': '#2E86AB', 'name': 'In Preparation', 'description': 'Our master chefs are crafting your culinary experience'},
+        'ready': { 'color': '#28A745', 'name': 'Ready for Service', 'description': 'Your gourmet meal is ready! Get ready to indulge'},
+        'completed': { 'color': '#008000', 'name': 'Experience Complete', 'description': 'Thank you for dining with us! We hope you enjoyed'},
+        'collected': { 'color': '#4B0082', 'name': 'Order Collected', 'description': 'Your takeaway order has been collected'}
     }
     
     current_status_info = status_config.get(current_status, status_config['pending'])
@@ -1848,7 +1848,7 @@ def display_kitchen_performance():
 # Enhanced Analytics Dashboard with Real Metrics
 def analytics_dashboard():
     if db is None:
-        st.error("❌ Database not available")
+        st.error("Database not available")
         return
         
     load_css()
