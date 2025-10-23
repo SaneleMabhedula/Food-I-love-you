@@ -1564,13 +1564,13 @@ def display_order_tracking(order_token):
         st.error(" Could not load order details")
         return
     
-    # Status configuration with beautiful styling #Bring emoji later🙌
+    # Status configuration with beautiful styling
     status_config = {
-        'pending': { 'color': '#FF6B35', 'name': 'Order Received', 'description': 'We have received your order and our chefs are preparing'},
-        'preparing': {'color': '#2E86AB', 'name': 'In Preparation', 'description': 'Our master chefs are crafting your culinary experience'},
-        'ready': { 'color': '#28A745', 'name': 'Ready for Service', 'description': 'Your gourmet meal is ready! Get ready to indulge'},
-        'completed': { 'color': '#008000', 'name': 'Experience Complete', 'description': 'Thank you for dining with us! We hope you enjoyed'},
-        'collected': { 'color': '#4B0082', 'name': 'Order Collected', 'description': 'Your takeaway order has been collected'}
+        'pending':   { 'color': '#FF6B35', 'name': 'Order Received',      'description': 'We have received your order and our chefs are preparing',           'emoji': '📥'},
+        'preparing': { 'color': '#2E86AB', 'name': 'In Preparation',      'description': 'Our master chefs are crafting your culinary experience',             'emoji': '👨‍🍳'},
+        'ready':     { 'color': '#28A745', 'name': 'Ready for Service',    'description': 'Your gourmet meal is ready! Get ready to indulge',                 'emoji': '✅'},
+        'completed': { 'color': '#008000', 'name': 'Experience Complete',  'description': 'Thank you for dining with us! We hope you enjoyed',                 'emoji': '🎉'},
+        'collected': { 'color': '#4B0082', 'name': 'Order Collected',      'description': 'Your takeaway order has been collected',                            'emoji': '📦'}
     }
     
     current_status_info = status_config.get(current_status, status_config['pending'])
