@@ -3121,7 +3121,7 @@ def landing_page():
             st.rerun()
     
     with col2:
-        if st.button("** Staff Portal**", use_container_width=True):
+        if st.button("**Staff Portal**", use_container_width=True):
             st.session_state.page = "staff"
             st.rerun()
 
